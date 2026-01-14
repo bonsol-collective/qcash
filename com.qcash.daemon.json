@@ -1,0 +1,9 @@
+{
+  "name": "com.qcash.daemon",
+  "description": "QCash Native Prover",
+  "path": "/home/jayant/Desktop/Projects/qcash/target/release/daemon",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://beehfekainnbonhcmplhjahhjplfkgjo/"
+  ]
+}
