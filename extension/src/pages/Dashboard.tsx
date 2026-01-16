@@ -14,7 +14,13 @@ import { cn } from '../lib/utils';
 
 export default function Dashboard() {
   return (
-    <div className="flex flex-col min-h-screen animate-fade-in bg-slate-950 pb-20">
+    <div className="flex flex-col min-h-screen animate-fade-in bg-slate-950 pb-20 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-600/5 blur-[100px] rounded-full"></div>
+         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500/5 blur-[100px] rounded-full"></div>
+      </div>
+
       {/* Header */}
       <header className="flex justify-between items-center p-4 border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-2">

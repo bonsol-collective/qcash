@@ -1,116 +1,114 @@
-import { useState, useEffect } from 'react';
+import { Loader2, Copy, CheckCircle2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
-import { useKeyManager } from '../hooks/useKeyManager';
-import { Copy, CheckCircle2, Eye, EyeOff } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { useWallet } from '../context/WalletContext';
+import { useWasm } from '../hooks/useWasm';
 
 export default function SeedGeneration() {
   const navigate = useNavigate();
-  const { generateKeys, keys } = useKeyManager();
-  const [revealed, setRevealed] = useState(false);
+  const { isReady, createIdentity } = useWasm();
+  const { setWallet } = useWallet();
+
+  const [mnemonicList, setMnemonicList] = useState<string[]>([]);
+  const [isChecked, setIsChecked] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
-    generateKeys();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (isReady) {
+      generate();
+    }
+  }, [isReady]);
 
-  const words = keys?.seedPhrase.split(' ') || Array(12).fill('loading');
-
-  const copyToClipboard = () => {
-    if (keys?.seedPhrase) {
-      navigator.clipboard.writeText(keys.seedPhrase);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const generate = async () => {
+    try {
+      const newWallet = await createIdentity();
+      console.log("Wallet Generated:", newWallet);
+      setWallet(newWallet);
+      setMnemonicList(newWallet.mnemonic.split(' '));
+      setLoading(false);
+    } catch (e) {
+      console.error("Keygen failed", e);
     }
   };
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(mnemonicList.join(' '));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-950 text-slate-100">
+        <Loader2 className="w-10 h-10 animate-spin text-cyan-500" />
+        <p className="mt-4 text-slate-400 font-mono tracking-widest">GENERATING QUANTUM KEYS...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col items-center min-h-screen p-6 animate-fade-in max-w-md mx-auto">
-      <div className="w-full space-y-6">
+    <div className="min-h-screen bg-slate-950 p-6 text-slate-100 flex flex-col items-center relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-600/10 blur-[100px] rounded-full"></div>
+         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500/5 blur-[100px] rounded-full"></div>
+      </div>
+
+      <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-cyan-400">
-            Backup Your Seed
+            Recovery Phrase
           </h2>
-          <p className="text-sm text-slate-400">
-            These 12 words are the only way to recover your funds.
+          <p className="text-sm text-slate-400 px-4">
+            Write down these 12 words in order and keep them somewhere safe. You'll need them to recover your vault.
           </p>
         </div>
 
-        <Card className="border-slate-800 bg-slate-900/80 backdrop-blur-md">
-          <CardContent className="p-4">
-            <div 
-              className={cn(
-                "grid grid-cols-3 gap-2 relative transition-all duration-300",
-                !revealed && "cursor-pointer"
-              )}
-              onClick={() => !revealed && setRevealed(true)}
-            >
-              {!revealed && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-slate-950/60 backdrop-blur-sm rounded-lg border border-slate-700/50 transition-opacity hover:bg-slate-950/50">
-                   <Eye className="w-8 h-8 text-cyan-400 mb-2" />
-                   <span className="text-sm font-medium text-cyan-400">Click to Reveal</span>
-                </div>
-              )}
-              
-              {words.map((word, i) => (
-                <div 
-                  key={i} 
-                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 flex items-center gap-2"
-                >
-                  <span className="text-xs text-slate-600 select-none w-4">{i + 1}.</span>
-                  <span className={cn("text-sm font-mono text-slate-200", !revealed && "blur-sm")}>
-                    {word}
-                  </span>
-                </div>
-              ))}
+        <div className="grid grid-cols-3 gap-3 w-full my-6">
+          {mnemonicList.map((word, i) => (
+            <div key={i} className="bg-slate-900/50 border border-slate-800 p-2.5 rounded-lg text-center text-sm font-mono group hover:border-slate-700 transition-colors">
+               <span className="text-slate-600 mr-2 text-xs">{i+1}.</span>
+               <span className="text-slate-200">{word}</span>
             </div>
+          ))}
+        </div>
 
-            <div className="mt-4 flex justify-between items-center">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-slate-400 hover:text-white"
-                onClick={() => setRevealed(!revealed)}
-              >
-                {revealed ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
-                {revealed ? 'Hide' : 'Show'}
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className={cn("border-slate-700", copied && "text-emerald-400 border-emerald-900 bg-emerald-950/30")}
-                onClick={copyToClipboard}
-              >
-                {copied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-                {copied ? 'Copied' : 'Copy Words'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCopy}
+            className="text-slate-400 hover:text-cyan-400 transition-colors"
+          >
+            {copied ? (
+              <><CheckCircle2 className="w-4 h-4 mr-2" /> Copied!</>
+            ) : (
+              <><Copy className="w-4 h-4 mr-2" /> Copy to Clipboard</>
+            )}
+          </Button>
+        </div>
 
-        <div className="space-y-4">
-          <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-800 bg-slate-900/50 cursor-pointer hover:border-slate-700 transition-colors">
-            <input 
-              type="checkbox" 
-              className="mt-1 w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-950"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
+        <div className="space-y-4 pt-4">
+          <div className="flex items-start gap-3 p-4 bg-slate-900/30 border border-slate-800 rounded-xl">
+            <input
+                type="checkbox"
+                id="safe"
+                checked={isChecked}
+                onChange={(e) => setIsChecked(e.target.checked)}
+                className="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-cyan-500 cursor-pointer"
             />
-            <span className="text-sm text-slate-300 select-none">
-              I have saved these words safely. I understand that if I lose them, I lose access to my wallet forever.
-            </span>
-          </label>
+            <label htmlFor="safe" className="text-sm text-slate-400 cursor-pointer leading-tight">
+                I understand that if I lose these words, I will lose access to my vault and it cannot be recovered.
+            </label>
+          </div>
 
-          <Button 
-            variant="cyber" 
-            className="w-full h-12 text-md" 
-            disabled={!confirmed || !keys}
+          <Button
+            disabled={!isChecked}
             onClick={() => navigate('/reveal')}
+            variant="cyber"
+            className="w-full h-12 text-md"
           >
             Continue
           </Button>

@@ -5,11 +5,12 @@ export const useWasm = ()=>{
     const [isReady,setIsReady] = useState(false);
 
     useEffect(()=>{
-       init().then(()=>{
+        // Initialize WASM module
+        init().then(()=>{
             init_panic_hook();
             setIsReady(true);
             console.log("WASM Initialized");
-       })
+        })
     },[])
 
     const createIdentity = async()=>{

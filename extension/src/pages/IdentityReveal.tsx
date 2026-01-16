@@ -1,9 +1,9 @@
+import { CheckCircle2, Copy, Info, Shield, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { useKeyManager } from '../hooks/useKeyManager';
-import { Copy, CheckCircle2, Shield, Zap, Info } from 'lucide-react';
 
 export default function IdentityReveal() {
   const navigate = useNavigate();
@@ -11,9 +11,6 @@ export default function IdentityReveal() {
   const [copiedPublic, setCopiedPublic] = useState(false);
   const [copiedVault, setCopiedVault] = useState(false);
 
-  // If accessed directly without keys (in a real app, use context/store)
-  // For prototype, we might rely on the hook's localStorage persistence logic or just mock checks
-  
   const copyToClipboard = (text: string, isVault: boolean) => {
     navigator.clipboard.writeText(text);
     if (isVault) {
@@ -26,7 +23,13 @@ export default function IdentityReveal() {
   };
 
   return (
-    <div className="flex flex-col items-center min-h-screen p-6 animate-fade-in max-w-md mx-auto pb-24">
+    <div className="flex flex-col items-center min-h-screen p-6 animate-fade-in max-w-md mx-auto pb-24 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-600/10 blur-[100px] rounded-full"></div>
+         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500/5 blur-[100px] rounded-full"></div>
+      </div>
+
       <div className="w-full space-y-6">
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-cyan-400">
@@ -97,7 +100,7 @@ export default function IdentityReveal() {
                 {copiedVault ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               </Button>
             </div>
-            
+
             <div className="flex gap-2 items-start p-2 rounded bg-cyan-950/20 border border-cyan-900/20">
               <Info className="w-4 h-4 text-cyan-500 mt-0.5 shrink-0" />
               <p className="text-xs text-cyan-200/80">
@@ -108,8 +111,8 @@ export default function IdentityReveal() {
         </Card>
 
         <div className="fixed bottom-0 left-0 w-full p-6 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent">
-          <Button 
-            variant="cyber" 
+          <Button
+            variant="cyber"
             className="w-full h-12 text-md shadow-lg shadow-cyan-900/20"
             onClick={() => navigate('/dashboard')}
           >
