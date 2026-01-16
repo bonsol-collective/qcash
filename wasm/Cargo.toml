@@ -1,0 +1,17 @@
+[package]
+name = "qcash-wasm"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib","rlib"]
+
+[dependencies]
+qcash_core = { path = "../core", features = ["wallet","std"] }
+serde = {version="1.0.228", features = ["derive"]}
+wasm-bindgen = "0.2.108"
+serde-wasm-bindgen = "0.6.5"
+console_error_panic_hook = "0.1.7"
+getrandom = { version = "0.2", features = ["js"] }
+bs58 = {version="0.5.1"}
+hex = "0.4.3"

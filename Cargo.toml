@@ -5,4 +5,4 @@ members = [
     "daemon",
     "methods",
     "methods/guest"
-]
+, "wasm"]

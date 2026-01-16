@@ -11,6 +11,9 @@ pub const HASH_SIZE:usize = 32;
 pub type HASH = [u8;HASH_SIZE];
 pub type KyberPubKey = [u8;KYBER_PUBKEY_SIZE];
 
+#[cfg(feature = "wallet")]
+pub mod wallet;
+
 #[derive(Clone,Debug,Serialize,Deserialize,PartialEq)]
 pub struct UTXOCommitmentHeader{
     pub utxo_hash:HASH,

@@ -1,7 +1,7 @@
 #![no_main]
 
 use risc0_zkvm::{guest::{env, sha::rust_crypto::{Digest, Sha256}}, sha::Impl};
-use core::{QSPVGuestInput, QspvGuestOutput, UTXOEncryptedPayload, UTXOCommitmentHeader, HASH, derive_kyber_key};
+use qcash_core::{QSPVGuestInput, QspvGuestOutput, UTXOEncryptedPayload, UTXOCommitmentHeader, HASH, derive_kyber_key};
 
 risc0_zkvm::guest::entry!(main);
 
@@ -37,15 +37,19 @@ fn main(){
         // Spend list propogation
         // Union of all prev history
         for past_hash in &utxo.payload.utxo_spent_list{
-            if !propagated_history.contains(past_hash) {
-                propagated_history.push(*past_hash);
+            if propagated_history.contains(past_hash) {
+                // If a past hash is ALREADY in our current history, it means
+                // two inputs share the same ancestor. This is a double spend.
+                panic!("Double Spend Detected: Ancestor collision");
             }
+            propagated_history.push(*past_hash);
         }
 
         // Append current UTXO hash
-        if !propagated_history.contains(&utxo.header.utxo_hash){
-            propagated_history.push(utxo.header.utxo_hash);
+        if propagated_history.contains(&utxo.header.utxo_hash){
+            panic!("Double Spend Detected: UTXO is already in history (Cycle)");
         }
+        propagated_history.push(utxo.header.utxo_hash);
 
         total_in_amount += utxo.payload.amount;
     }

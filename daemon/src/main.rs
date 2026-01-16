@@ -1,4 +1,5 @@
-use core::{DecryptedInput, UTXOEncryptedPayload, UTXOCommitmentHeader, QSPVGuestInput, HASH};
+use qcash_core::wallet::WalletKeys;
+use qcash_core::{DecryptedInput, UTXOEncryptedPayload, UTXOCommitmentHeader, QSPVGuestInput, HASH};
 use std::time::Instant;
 use base64::Engine;
 use byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
@@ -8,8 +9,6 @@ use std::{fs, panic};
 use std::io::{self, Read, Write};
 use risc0_zkvm::{default_prover, ExecutorEnv};
 use methods::GUEST_ELF;
-mod key_manager;
-use key_manager::*;
 
 #[derive(Serialize, Deserialize, Default)]
 struct WalletDB{

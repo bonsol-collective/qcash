@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-core = { path = "../core" }
+qcash_core = { path = "../core", features = ["wallet"] }
 methods = { path = "../methods" }
 risc0-zkvm = "3.0.4"
 serde = { version = "1.0.228", features = ["derive"] }

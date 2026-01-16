@@ -4,7 +4,7 @@ use ed25519_dalek_bip32::{ChildIndex, ExtendedSigningKey};
 use hmac::{Hmac, Mac};
 use pqc_kyber::{CryptoRng, Keypair, RngCore};
 use sha2::{Sha256};
-use core::{derive_kyber_key, DeterministicRng};
+use crate::DeterministicRng;
 
 pub struct WalletKeys{
     pub solana_key:SigningKey,
