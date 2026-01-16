@@ -1,13 +1,16 @@
 #![no_main]
 
-use risc0_zkvm::guest::env;
-use core::{QSPVGuestInput, QspvGuestOutput, UTXOEncryptedPayload, UTXOCommitmentHeader, HASH};
-use sha2::{Sha256, Digest};
+use risc0_zkvm::{guest::{env, sha::rust_crypto::{Digest, Sha256}}, sha::Impl};
+use core::{QSPVGuestInput, QspvGuestOutput, UTXOEncryptedPayload, UTXOCommitmentHeader, HASH, derive_kyber_key};
 
 risc0_zkvm::guest::entry!(main);
 
 fn main(){
     let inputs:QSPVGuestInput  = env::read();
+
+    // Cost: Moderate (~500k cycles), but necessary for security.
+    let my_keys = derive_kyber_key(&inputs.sender_private_key_fragment);
+    let my_pubkey_bytes = my_keys.public; // [u8; 1184]
 
     let mut total_in_amount:u64 = 0;
 
@@ -23,6 +26,9 @@ fn main(){
 
         // Verify Ownership
         // In Prod: Kyber.decapsulate(utxo.payload, input.sender_private_key)
+        if utxo.payload.receiver_vault != my_pubkey_bytes {
+            panic!("Ownership Error: I cannot spend this UTXO. It belongs to someone else.");
+        }
 
         // Double spend prevention (History Check)
         // Ensure the UTXO's Hash is not in your own history
@@ -70,7 +76,7 @@ fn main(){
         is_return:true,
         // In reality, this should be the SENDER'S vault.
         // For POC we reuse receiver_pubkey or derive from SK.
-        receiver_vault: inputs.receiver_pubkey,
+        receiver_vault: my_pubkey_bytes,
         randomness: inputs.return_randomness,
         utxo_spent_list: propagated_history,
         version: 1,
@@ -93,7 +99,7 @@ fn main(){
 }
 
 fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
-    let mut hasher = Sha256::new();
+    let mut hasher = Sha256::<Impl>::new();
     hasher.update(payload.amount.to_le_bytes());
     hasher.update(payload.receiver_vault);
     hasher.update(payload.randomness);
@@ -103,7 +109,7 @@ fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
 
 fn create_header(payload: &UTXOEncryptedPayload, prev_hash: HASH, epoch: u32) -> UTXOCommitmentHeader {
     let c_commitment = hash_payload(payload);
-    let mut hasher = Sha256::new();
+    let mut hasher = Sha256::<Impl>::new();
     hasher.update(c_commitment);
     hasher.update(prev_hash);
     hasher.update(epoch.to_le_bytes());

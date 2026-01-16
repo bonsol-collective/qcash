@@ -538,8 +538,13 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 name = "core"
 version = "0.1.0"
 dependencies = [
+ "bip39",
+ "hmac",
+ "pqc_kyber",
+ "rand_core 0.9.5",
  "serde",
  "serde_arrays",
+ "sha2",
 ]
 
 [[package]]
