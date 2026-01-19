@@ -1,6 +1,6 @@
+import { Shield, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Shield, Wallet } from 'lucide-react';
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -26,27 +26,24 @@ export default function Welcome() {
       </div>
 
       <div className="flex flex-col gap-4 w-full max-w-xs">
-        <Button 
-          variant="cyber" 
-          size="lg" 
+        <Button
+          variant="cyber"
+          size="lg"
           className="w-full text-md h-12"
           onClick={() => navigate('/seed')}
         >
           <Wallet className="mr-2 h-4 w-4" />
-          Create New Vault
+          Create New Wallet
         </Button>
-        <Button 
-          variant="outline" 
-          size="lg" 
+        <Button
+          variant="outline"
+          size="lg"
           className="w-full h-12 border-slate-700 hover:bg-slate-800 hover:text-slate-200"
         >
           Import Seed Phrase
         </Button>
       </div>
 
-      <p className="text-xs text-slate-600">
-        Powered by Kyber-768 & Ed25519
-      </p>
     </div>
   );
 }

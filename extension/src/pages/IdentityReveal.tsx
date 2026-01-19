@@ -1,125 +1,68 @@
-import { CheckCircle2, Copy, Info, Shield, Zap } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowRight, Copy, Shield, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { useKeyManager } from '../hooks/useKeyManager';
+import { Card } from '../components/ui/card';
+import { useWallet } from '../context/WalletContext';
 
 export default function IdentityReveal() {
   const navigate = useNavigate();
-  const { keys } = useKeyManager();
-  const [copiedPublic, setCopiedPublic] = useState(false);
-  const [copiedVault, setCopiedVault] = useState(false);
+  const { wallet } = useWallet();
 
-  const copyToClipboard = (text: string, isVault: boolean) => {
-    navigator.clipboard.writeText(text);
-    if (isVault) {
-      setCopiedVault(true);
-      setTimeout(() => setCopiedVault(false), 2000);
-    } else {
-      setCopiedPublic(true);
-      setTimeout(() => setCopiedPublic(false), 2000);
-    }
-  };
+  // Redirect if no wallet exists (user tried to skip)
+  if (!wallet) {
+    navigate('/');
+    return null;
+  }
+
+  // Helper to truncate long keys
+  const truncate = (str: string, len = 8) =>
+    `${str.slice(0, len)}...${str.slice(-len)}`;
 
   return (
-    <div className="flex flex-col items-center min-h-screen p-6 animate-fade-in max-w-md mx-auto pb-24 relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
-         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-600/10 blur-[100px] rounded-full"></div>
-         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500/5 blur-[100px] rounded-full"></div>
-      </div>
+    <div className="min-h-screen bg-slate-950 p-6 text-slate-100 flex flex-col items-center">
+      <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
+        Your Dual Identity
+      </h1>
+      <p className="text-slate-400 text-center mb-8 text-sm">
+        One seed. Two worlds.
+      </p>
 
-      <div className="w-full space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-cyan-400">
-            Dual Identity Created
-          </h2>
-          <p className="text-sm text-slate-400">
-            Your single seed manages both your public and private lives.
-          </p>
+      {/* Card 1: Public Solana */}
+      <Card className="w-full max-w-md bg-slate-900 border-slate-800 p-4 mb-4 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
+        <div className="flex items-center gap-3 mb-2">
+            <Wallet className="w-5 h-5 text-purple-400" />
+            <span className="font-semibold text-purple-100">Public Solana Address</span>
         </div>
-
-        {/* Public Identity Card */}
-        <Card className="border-violet-900/50 bg-slate-900/80 overflow-hidden relative group">
-          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity">
-            <Zap className="w-16 h-16 text-violet-500" />
-          </div>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-violet-400 flex items-center gap-2">
-              <div className="p-1.5 rounded-full bg-violet-500/10">
-                <Zap className="w-4 h-4" />
-              </div>
-              Public Address (Solana)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="bg-slate-950/50 border border-slate-800 rounded-lg p-3 flex justify-between items-center">
-              <code className="text-sm text-slate-300 font-mono">
-                {keys ? keys.publicAddress : "Loading..."}
-              </code>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-slate-500 hover:text-violet-400"
-                onClick={() => keys && copyToClipboard(keys.publicAddress, false)}
-              >
-                {copiedPublic ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </Button>
-            </div>
-            <p className="text-xs text-slate-500">
-              Use this for gas fees and public interactions. Fully transparent on-chain.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Private Vault Card */}
-        <Card className="border-cyan-900/50 bg-slate-900/80 overflow-hidden relative group shadow-[0_0_30px_rgba(6,182,212,0.1)]">
-          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity">
-             <Shield className="w-16 h-16 text-cyan-500" />
-          </div>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-cyan-400 flex items-center gap-2">
-              <div className="p-1.5 rounded-full bg-cyan-500/10 shadow-[0_0_10px_rgba(6,182,212,0.3)]">
-                <Shield className="w-4 h-4" />
-              </div>
-              Private Vault Key
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="bg-slate-950/50 border border-cyan-900/30 rounded-lg p-3 flex justify-between items-center">
-              <code className="text-sm text-cyan-100 font-mono tracking-wide">
-                {keys ? keys.vaultKey : "Loading..."}
-              </code>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-cyan-500 hover:text-cyan-300 hover:bg-cyan-950/30"
-                onClick={() => keys && copyToClipboard(keys.vaultKey, true)}
-              >
-                {copiedVault ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </Button>
-            </div>
-
-            <div className="flex gap-2 items-start p-2 rounded bg-cyan-950/20 border border-cyan-900/20">
-              <Info className="w-4 h-4 text-cyan-500 mt-0.5 shrink-0" />
-              <p className="text-xs text-cyan-200/80">
-                This is your <strong>Shielded Receiver Address</strong>. Use it to receive assets privately via Zero-Knowledge transfers.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="fixed bottom-0 left-0 w-full p-6 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent">
-          <Button
-            variant="cyber"
-            className="w-full h-12 text-md shadow-lg shadow-cyan-900/20"
-            onClick={() => navigate('/dashboard')}
-          >
-            Enter Dashboard
-          </Button>
+        <div className="bg-slate-950 p-3 rounded font-mono text-sm text-slate-300 flex justify-between items-center">
+            {truncate(wallet.solana_address)}
+            <Copy className="w-4 h-4 cursor-pointer hover:text-white" />
         </div>
-      </div>
+      </Card>
+
+      {/* Card 2: Private Vault */}
+      <Card className="w-full max-w-md bg-slate-900 border-slate-800 p-4 mb-8 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500" />
+        <div className="flex items-center gap-3 mb-2">
+            <Shield className="w-5 h-5 text-cyan-400" />
+            <span className="font-semibold text-cyan-100">Private Vault Key</span>
+        </div>
+        <div className="bg-slate-950 p-3 rounded font-mono text-sm text-slate-300 flex justify-between items-center break-all">
+            {/* Kyber keys are huge, maybe show a smaller slice */}
+            {truncate(wallet.kyber_pubkey, 12)}
+            <Copy className="w-4 h-4 cursor-pointer hover:text-white" />
+        </div>
+        <p className="text-xs text-slate-500 mt-2">
+            This key allows you to receive assets privately using Zero-Knowledge proofs.
+        </p>
+      </Card>
+
+      <Button
+        onClick={() => navigate('/dashboard')}
+        className="w-full max-w-md bg-slate-800 hover:bg-slate-700 text-slate-200"
+      >
+        Enter Dashboard <ArrowRight className="ml-2 w-4 h-4" />
+      </Button>
     </div>
   );
 }

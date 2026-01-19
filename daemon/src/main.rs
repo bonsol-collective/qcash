@@ -1,4 +1,4 @@
-use qcash_core::wallet::WalletKeys;
+use qcash_core::wallet::*;
 use qcash_core::{DecryptedInput, UTXOEncryptedPayload, UTXOCommitmentHeader, QSPVGuestInput, HASH};
 use std::time::Instant;
 use base64::Engine;
