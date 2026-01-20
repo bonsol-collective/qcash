@@ -8,16 +8,41 @@
   },
   "instructions": [
     {
-      "name": "register_vault",
+      "name": "complete_vault",
       "discriminator": [
-        121,
-        62,
-        4,
+        13,
         122,
-        93,
-        231,
-        119,
-        49
+        144,
+        244,
+        184,
+        172,
+        57,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "kyber_key_part2",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "init_vault",
+      "discriminator": [
+        77,
+        79,
+        85,
+        150,
+        33,
+        217,
+        52,
+        106
       ],
       "accounts": [
         {
@@ -42,7 +67,7 @@
               },
               {
                 "kind": "arg",
-                "path": "kyber_pubkey_hash"
+                "path": "key_hash"
               }
             ]
           }
@@ -54,17 +79,17 @@
       ],
       "args": [
         {
-          "name": "kyber_pubkey",
-          "type": "bytes"
-        },
-        {
-          "name": "kyber_pubkey_hash",
+          "name": "key_hash",
           "type": {
             "array": [
               "u8",
               32
             ]
           }
+        },
+        {
+          "name": "kyber_key_part1",
+          "type": "bytes"
         }
       ]
     }
@@ -89,6 +114,16 @@
       "code": 6000,
       "name": "InvalidKeyLength",
       "msg": "Kyber Public key must be exactly 1184 bytes long"
+    },
+    {
+      "code": 6001,
+      "name": "ChunkSizeExceeded",
+      "msg": "Chunk size exceeds maximum allowed length of 800 bytes"
+    },
+    {
+      "code": 6002,
+      "name": "HashMismatch",
+      "msg": "Hash Mismatch: Provided key does not match the expected hash"
     }
   ],
   "types": [

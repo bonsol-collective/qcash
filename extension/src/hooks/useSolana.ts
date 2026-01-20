@@ -5,14 +5,13 @@ import {
   web3,
   type Idl,
 } from "@coral-xyz/anchor";
-import { keccak_256 } from "@noble/hashes/sha3.js";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { Buffer } from "buffer";
 import { useWallet } from "../context/WalletContext";
 import idl from "../idl/qcash_program.json";
 
 const NETWORK = "http://127.0.0.1:8899";
-const PROGRAM_ID = "AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD";
+const PROGRAM_ID = new PublicKey("AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD");
 
 export const useSolana = () => {
   const wallet = useWallet();
@@ -74,42 +73,56 @@ export const useSolana = () => {
       }),
     );
 
+    if(!wallet.wallet?.kyber_pubkey){
+      throw new Error("Kyber key not found");
+    }
+
     // convert kyber key to buffer(Vec<u8>)
     const kyberBytes = utils.bytes.bs58.decode(
       wallet.wallet?.kyber_pubkey || "",
     );
-    console.log(
-      "Registering Vault for Kyber Key...",
-      kyberBytes.length,
-      "bytes",
-    );
 
-    // Use Keccak256 to match the Rust program (solana_program::keccak)
-    const hashArray = keccak_256(kyberBytes);
-    console.log(
-      "Hash length:",
-      hashArray.length,
-      "Hash:",
-      Array.from(hashArray),
-    );
+    const hashBuffer = await crypto.subtle.digest("SHA-256",kyberBytes);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
 
     const [vault_pda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vault"), hashArray],
-      new PublicKey(PROGRAM_ID),
-    );
+      [
+        Buffer.from("vault"),
+        Buffer.from(hashArray)
+      ],
+      PROGRAM_ID,
+    )
 
-    console.log("Vault PDA:", vault_pda.toString());
+    // splitting data - use Buffer for Anchor bytes encoding
+    const part1 = Buffer.from(kyberBytes.slice(0,700));
+    const part2 = Buffer.from(kyberBytes.slice(700));
 
-    const tx = await program.methods
-      .registerVault(kyberBytes, Array.from(hashArray))
+    const tx1 = await program.methods
+    .initVault(hashArray, part1)
+    .accounts({
+      vault:vault_pda,
+      signer:payer.publicKey,
+      systemProgram:web3.SystemProgram.programId,
+    })
+    .signers([payer])
+    .rpc();
+
+    console.log("Part 1 Confirmed:", tx1);
+    await connection.confirmTransaction(tx1);
+
+    console.log("Sending Part 2 (Complete)...");
+    const tx2 = await program.methods
+      .completeVault(part2)
       .accounts({
+        vault: vault_pda,
         signer: payer.publicKey,
       })
       .signers([payer])
       .rpc();
 
-    console.log("Vault Registered! Signature:", tx);
-    return tx;
+    console.log("Vault Registered Successfully!", tx2);
+    return tx2;
+
   };
 
   return { registerVault };

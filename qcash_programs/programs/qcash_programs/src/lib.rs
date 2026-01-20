@@ -15,7 +15,11 @@ declare_id!("AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD");
 pub mod solana_programs {
     use super::*;
 
-    pub fn register_vault(ctx: Context<RegisterVault>, kyber_pubkey: Vec<u8>, kyber_pubkey_hash: [u8; 32]) -> Result<()> {
-        register_vault::register_vault(ctx, kyber_pubkey, kyber_pubkey_hash)
+    pub fn init_vault(ctx: Context<InitVault>, key_hash: [u8; 32], kyber_key_part1: Vec<u8>) -> Result<()> {
+        init_vault::init_vault(ctx, key_hash, kyber_key_part1)
+    }
+
+    pub fn complete_vault(ctx: Context<CompleteVault>, kyber_key_part2: Vec<u8>) -> Result<()> {
+        complete_vault::complete_vault(ctx, kyber_key_part2)
     }
 }
