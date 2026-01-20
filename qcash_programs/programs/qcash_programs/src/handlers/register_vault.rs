@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
 use crate::{Vault,error::ErrorCode};
-use anchor_lang::solana_program::keccak;
-
+use solana_program::keccak;
 
 #[derive(Accounts)]
-#[instruction(kyber_pubkey:Vec<u8>)]
+#[instruction(kyber_pubkey: Vec<u8>, kyber_pubkey_hash: [u8; 32])]
 pub struct RegisterVault<'info>{
 
     #[account(mut)]
@@ -13,11 +12,10 @@ pub struct RegisterVault<'info>{
     #[account(
         init,
         payer=signer,
-        // TODO - Should add some padding
         space=Vault::DISCRIMINATOR.len() + Vault::INIT_SPACE + 8,
         seeds=[
             b"vault",
-            keccak::hash(&kyber_pubkey).as_ref()
+            kyber_pubkey_hash.as_ref()
         ],
         bump,
     )]
@@ -26,11 +24,14 @@ pub struct RegisterVault<'info>{
     pub system_program:Program<'info,System>,
 }
 
-pub fn register_vault(ctx:Context<RegisterVault>,kyber_pubkey:Vec<u8>)->Result<()>{
+pub fn register_vault(ctx:Context<RegisterVault>,kyber_pubkey:Vec<u8>, kyber_pubkey_hash: [u8; 32])->Result<()>{
 
     let vault = &mut ctx.accounts.vault;
 
     require!(kyber_pubkey.len() == 1184, ErrorCode::InvalidKeyLength);
+
+    let computed_hash = keccak::hash(&kyber_pubkey);
+    require!(computed_hash.0 == kyber_pubkey_hash, ErrorCode::InvalidKeyLength);
 
     vault.version = 1;
     vault.kyber_pubkey = kyber_pubkey;

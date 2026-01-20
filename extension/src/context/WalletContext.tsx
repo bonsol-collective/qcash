@@ -1,4 +1,4 @@
-import React, { useContext, useState, type ReactNode } from "react";
+import React, { useContext, useEffect, useState, type ReactNode } from "react";
 
 export interface WalletData{
     mnemonic: string;
@@ -9,16 +9,61 @@ export interface WalletData{
 
 interface WalletContextType{
     wallet:WalletData | null;
+    isLoading:boolean;
     setWallet: (wallet: WalletData | null)=>void;
+    clearWallet: ()=>void;
 }
 
 const WalletContext = React.createContext<WalletContextType|null>(null);
 
 export const WalletProvider = ({children}:{children:ReactNode})=>{
-    const [wallet,setWallet] = useState<WalletData|null>(null);
+    const [wallet,setWalletState] = useState<WalletData|null>(null);
+    const [isLoading,setIsLoading] = useState(true);
+
+    // load from Chrome Storage on App Start
+    useEffect(()=>{
+        // check if you are in chrome environment
+        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local){
+            chrome.storage.local.get(["qcash_wallet"],(result)=>{
+                if(result.qcash_wallet){
+                    console.log("Wallet loaded from storage");
+                    setWalletState(result.qcash_wallet as WalletData);
+                }
+                setIsLoading(false);
+            })
+        }else{
+            // Fallback for non-extension
+            const local = localStorage.getItem("qcash_wallet");
+            if(local){
+                setWalletState(JSON.parse(local));
+            }
+            setIsLoading(false);
+        }
+    },[])
+
+    const setWallet = (newWallet:WalletData | null)=>{
+        setWalletState(newWallet);
+        if(newWallet){
+            // save
+            if(typeof chrome !== "undefined" && chrome.storage && chrome.storage.local){
+                chrome.storage.local.set({qcash_wallet:newWallet});
+            }else{
+                localStorage.setItem("qcash_wallet",JSON.stringify(newWallet));
+            }
+        }else{
+            // Clear
+            if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.remove("qcash_wallet");
+            } else {
+                localStorage.removeItem("qcash_wallet");
+            }
+        }
+    }
+
+    const clearWallet = ()=> setWallet(null);
 
     return (
-        <WalletContext.Provider value={{wallet,setWallet}}>
+        <WalletContext.Provider value={{wallet,setWallet,clearWallet,isLoading}}>
             {children}
         </WalletContext.Provider>
     )

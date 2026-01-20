@@ -4,5 +4,6 @@ members = [
     "core",
     "daemon",
     "methods",
-    "methods/guest"
-, "wasm"]
+    "methods/guest",
+    "wasm"
+]
