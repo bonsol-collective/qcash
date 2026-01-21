@@ -14,7 +14,6 @@ import { useWasm } from "./useWasm";
 const NETWORK = "http://127.0.0.1:8899";
 const PROGRAM_ID = new PublicKey("AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD");
 const MIN_SOL_REQUIRED = 0.01 * web3.LAMPORTS_PER_SOL;
-const KYBER_KEY_LENGTH = 1184;
 
 export class InsufficientFundsError extends Error {
   constructor( address: string, currentBalance: number) {
@@ -57,16 +56,20 @@ export const useSolana = () => {
       throw new Error("Kyber key not found");
     }
 
-    const hash = await crypto.subtle.digest("SHA-256",Buffer.from(wallet.wallet.kyber_pubkey));
-    const hashArray = new Uint8Array(hash);
+    const kyberKeyBytes = utils.bytes.bs58.decode(wallet.wallet.kyber_pubkey);
+
+    const hash = await crypto.subtle.digest("SHA-256",kyberKeyBytes);
+    const hashArray = Array.from(new Uint8Array(hash));
 
     const [vault_pda,_bump] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("vault"),
-        hashArray
+        Buffer.from(hashArray)
       ],
       PROGRAM_ID
     )
+
+    console.log("Vault_pda",vault_pda.toString());
 
     return vault_pda;
   }
@@ -74,9 +77,13 @@ export const useSolana = () => {
   const getVaultState = async():Promise<PublicKey|null>=>{
     const vault_pda = await deriveVaultPDA();
 
+    console.log("Vault_pda",vault_pda.toString());
+
     const vault_info = await connection.getAccountInfo(vault_pda);
 
-    if (vault_info?.data.length != KYBER_KEY_LENGTH){
+    console.log("Vault_info",vault_info?.data.length);
+
+    if (vault_info?.data.length == 0 ){
       return null;
     }
 
@@ -158,15 +165,15 @@ export const useSolana = () => {
     const hashBuffer = await crypto.subtle.digest("SHA-256",kyberBytes);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
 
-    // const [vault_pda] = PublicKey.findProgramAddressSync(
-    //   [
-    //     Buffer.from("vault"),
-    //     Buffer.from(hashArray)
-    //   ],
-    //   PROGRAM_ID,
-    // )
+    const [vault_pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("vault"),
+        Buffer.from(hashArray)
+      ],
+      PROGRAM_ID,
+    )
 
-    const vault_pda = await deriveVaultPDA();
+    // const vault_pda = await deriveVaultPDA();
 
     // splitting data - use Buffer for Anchor bytes encoding
     const part1 = Buffer.from(kyberBytes.slice(0,700));

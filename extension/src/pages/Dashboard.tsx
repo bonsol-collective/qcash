@@ -1,11 +1,12 @@
 import type { PublicKey } from '@solana/web3.js';
-import { AlertTriangle, CheckCircle, Copy, Database, Key, Loader2, ShieldCheck, Wallet } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Copy, Database, Key, Loader2, Send, ShieldCheck, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { FundWalletCard } from '../components/FundWalletCard';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { useWallet } from '../context/WalletContext';
 import { InsufficientFundsError, useSolana } from '../hooks/useSolana';
+import { SendTokenModal } from '../components/SendTokenModal';
 
 export default function Dashboard() {
   const { wallet } = useWallet();
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const [vaultAddress, setVaultAddress] = useState<PublicKey | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
 
   // Check for Vault Existence on Mount
   useEffect(() => {
@@ -26,6 +28,7 @@ export default function Dashboard() {
             setBalance(bal);
 
             const existingAddress = await getVaultState();
+            console.log("Existing Address:", existingAddress);
             if (existingAddress) {
                 setVaultAddress(existingAddress);
                 setStatus('registered');
@@ -52,6 +55,9 @@ export default function Dashboard() {
       const addr = await getVaultState();
       if(addr) setVaultAddress(addr);
 
+      // Auto-transition to registered state after 3 seconds
+      setTimeout(() => setStatus('registered'), 3000);
+
     } catch (e: any) {
       console.error(e);
       if (e instanceof InsufficientFundsError) {
@@ -73,11 +79,22 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background p-4 text-foreground font-sans flex flex-col items-center gap-6 selection:bg-white/20">
-      <header className="text-center space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            QCash Wallet
-        </h1>
-        <p className="text-muted-foreground text-sm font-medium">Post-Quantum Solana Storage</p>
+      <header className="w-full max-w-md flex items-center justify-between">
+        <div className="space-y-1">
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
+                QCash Wallet
+            </h1>
+            <p className="text-muted-foreground text-xs font-medium">Post-Quantum Solana Storage</p>
+        </div>
+        {status === 'registered' && (
+             <Button
+                onClick={() => setIsSendModalOpen(true)}
+                size="sm"
+                className="bg-primary text-primary-foreground hover:bg-white/90 gap-2 font-semibold shadow-sm"
+            >
+                <Send className="w-3.5 h-3.5" /> Send
+            </Button>
+        )}
       </header>
 
       {/* --- IDENTITY SECTION --- */}
@@ -174,21 +191,21 @@ export default function Dashboard() {
             minRequired="0.01"
             onRetry={handleRegister}
         />
+      ) : status === 'registered' ? (
+        <div className="w-full max-w-md p-4 bg-secondary/20 border border-border rounded-xl flex items-center justify-between gap-4">
+             <div className="flex items-center gap-3">
+                 <div className="p-2 bg-secondary/40 rounded-full">
+                     <CheckCircle className="w-5 h-5 text-foreground" />
+                 </div>
+                 <div>
+                     <p className="text-foreground font-bold text-sm">System Ready</p>
+                     <p className="text-muted-foreground text-xs">Vault is active and secure.</p>
+                 </div>
+             </div>
+        </div>
       ) : (
         <Card className="w-full max-w-md p-6 space-y-4 shadow-sm border border-border bg-background">
             <h2 className="text-lg font-bold text-foreground">System Status</h2>
-
-            {status === 'registered' && (
-                <div className="p-4 bg-secondary/20 border border-border rounded-xl flex items-center gap-4">
-                    <div className="bg-secondary/40 p-2.5 rounded-full">
-                        <CheckCircle className="w-5 h-5 text-foreground" />
-                    </div>
-                    <div>
-                        <p className="text-foreground font-bold text-sm">Vault Active</p>
-                        <p className="text-muted-foreground text-xs mt-0.5">Ready to receive private funds.</p>
-                    </div>
-                </div>
-            )}
 
             {status === 'idle' && (
                 <div className="p-4 bg-secondary/30 rounded-xl border border-border flex items-center justify-between gap-4">
@@ -238,6 +255,11 @@ export default function Dashboard() {
 
         </Card>
       )}
+
+      <SendTokenModal
+        isOpen={isSendModalOpen}
+        onClose={() => setIsSendModalOpen(false)}
+      />
     </div>
   );
 }
