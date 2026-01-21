@@ -47,3 +47,13 @@ pub fn restore_wallet(mnemonic:&str)->Result<JsValue,String>{
 
     Ok(serde_wasm_bindgen::to_value(&result).unwrap())
 }
+
+
+#[wasm_bindgen]
+pub fn get_solana_secret(mnemonic:&str)->Result<Vec<u8>,String>{
+    let keys = std::panic::catch_unwind(||{
+        WalletKeys::from_mnemonic(mnemonic)
+    }).map_err(|_| "Invalid Mnemonic Phrase".to_string())?;
+
+    Ok(keys.solana_key.to_keypair_bytes().to_vec())
+}

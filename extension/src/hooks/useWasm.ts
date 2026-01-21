@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import init, { generate_wallet, init_panic_hook, restore_wallet } from '../wasm/qcash_wasm';
+import init, { generate_wallet, get_solana_secret, init_panic_hook, restore_wallet } from '../wasm/qcash_wasm';
 
 export const useWasm = ()=>{
     const [isReady,setIsReady] = useState(false);
@@ -33,5 +33,13 @@ export const useWasm = ()=>{
         return result;
     }
 
-    return { isReady, createIdentity, restoreIdentity };
+    const getSolanaSecret = (mnemonic: string): Uint8Array => {
+        if (!isReady){
+            throw new Error("WASM not initialized");
+        }
+
+        return get_solana_secret(mnemonic);
+    }
+
+    return { isReady, createIdentity, restoreIdentity, getSolanaSecret };
 }

@@ -9,12 +9,24 @@ import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { Buffer } from "buffer";
 import { useWallet } from "../context/WalletContext";
 import idl from "../idl/qcash_program.json";
+import { useWasm } from "./useWasm";
 
 const NETWORK = "http://127.0.0.1:8899";
 const PROGRAM_ID = new PublicKey("AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD");
+const MIN_SOL_REQUIRED = 0.01 * web3.LAMPORTS_PER_SOL;
+
+export class InsufficientFundsError extends Error {
+  constructor( address: string, currentBalance: number) {
+    super(
+      `Insufficient SOL. Address: ${address} has ${currentBalance / 1e9} SOL.`
+    );
+    this.name = "InsufficientFundsError";
+  }
+}
 
 export const useSolana = () => {
   const wallet = useWallet();
+  const { getSolanaSecret, isReady: wasmReady } = useWasm();
 
   // const getProvider = ()=>{
   //     const connection = new Connection(NETWORK, "confirmed");
@@ -28,20 +40,39 @@ export const useSolana = () => {
   // }
 
   const registerVault = async () => {
-    if (!wallet) {
+    if (!wallet || !wallet.wallet) {
       throw new Error("Wallet not connected");
+    }
+
+    if (!wasmReady) {
+      throw new Error("WASM not initialized");
     }
 
     const connection = new Connection(NETWORK, "confirmed");
 
-    // FOR TESTING, we are generating random public key
-    const payer = Keypair.generate();
-    console.log("Requesting Airdrop for Payer:", payer.publicKey.toString());
-    const airDropSig = await connection.requestAirdrop(
-      payer.publicKey,
-      2 * web3.LAMPORTS_PER_SOL,
-    );
-    await connection.confirmTransaction(airDropSig);
+    // // FOR TESTING, we are generating random public key
+    // const payer = Keypair.generate();
+    // console.log("Requesting Airdrop for Payer:", payer.publicKey.toString());
+    // const airDropSig = await connection.requestAirdrop(
+    //   payer.publicKey,
+    //   2 * web3.LAMPORTS_PER_SOL,
+    // );
+    // await connection.confirmTransaction(airDropSig);
+
+    const secretBytes = getSolanaSecret(wallet.wallet?.mnemonic);
+
+    // Recontructing the keypair
+    const payer = Keypair.fromSecretKey(secretBytes);
+    console.log("Payer Public Key:", payer.publicKey.toString());
+
+    if(payer.publicKey.toString() != wallet.wallet.solana_address){
+      throw new Error("Derived key does not match Wallet Address! Derivation mismatch.");
+    }
+
+    const balance = await connection.getBalance(payer.publicKey);
+    if(balance < MIN_SOL_REQUIRED){
+      throw new InsufficientFundsError(payer.publicKey.toString(), balance);
+    }
 
     // setup anchor program
     const program = new Program(
