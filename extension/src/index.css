@@ -1,33 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Inter+Tight:ital,wght@0,100..900;1,100..900&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
 
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 210 40% 98%;
+  --background: 0 0% 2.7%;    /* #070707 */
+  --foreground: 0 0% 100%;    /* #FFFFFF */
 
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
+  --card: 0 0% 2.7%;
+  --card-foreground: 0 0% 100%;
 
-  --primary: 263.4 70% 50.4%; /* Purple */
-  --primary-foreground: 210 40% 98%;
+  --popover: 0 0% 2.7%;
+  --popover-foreground: 0 0% 100%;
 
-  --secondary: 180 100% 50%; /* Cyan/Teal */
-  --secondary-foreground: 222.2 47.4% 11.2%;
+  --primary: 0 0% 100%;       /* #FFFFFF */
+  --primary-foreground: 0 0% 0%; /* #000000 */
 
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --secondary: 0 0% 9%;       /* #171717 */
+  --secondary-foreground: 0 0% 100%;
 
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
+  --muted: 0 0% 9%;
+  --muted-foreground: 240 1% 84%; /* #d4d4d7 */
+
+  --accent: 0 0% 9%;
+  --accent-foreground: 0 0% 100%;
 
   --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive-foreground: 0 0% 100%;
 
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 263.4 70% 50.4%;
+  --border: 0 0% 20%;
+  --input: 0 0% 20%;
+  --ring: 0 0% 100%;
 
   --radius: 0.5rem;
 }
@@ -44,7 +47,7 @@
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-foreground: #d4d4d7;
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
@@ -56,9 +59,13 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  
+
+  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+
   --animate-spin-slow: spin 3s linear infinite;
   --animate-fade-in: fadeIn 0.5s ease-out forwards;
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
@@ -66,14 +73,13 @@
   }
 }
 
-/* Base styles need to be standard CSS now or use @layer base equivalent in v4 */
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  width: 360px;
+  width: 400px;
   min-height: 600px;
   margin: 0;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 * {

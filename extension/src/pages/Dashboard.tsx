@@ -1,5 +1,6 @@
-import { AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import type { PublicKey } from '@solana/web3.js';
+import { AlertTriangle, CheckCircle, Copy, Database, Key, Loader2, ShieldCheck, Wallet } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { FundWalletCard } from '../components/FundWalletCard';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -8,11 +9,36 @@ import { InsufficientFundsError, useSolana } from '../hooks/useSolana';
 
 export default function Dashboard() {
   const { wallet } = useWallet();
-  const { registerVault } = useSolana();
+  const { registerVault, getVaultState, getSolBalance } = useSolana();
 
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'needs-funds'>('idle');
+  const [status, setStatus] = useState<'checking' | 'idle' | 'loading' | 'success' | 'registered' | 'error' | 'needs-funds'>('checking');
   const [txSig, setTxSig] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [vaultAddress, setVaultAddress] = useState<PublicKey | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  // Check for Vault Existence on Mount
+  useEffect(() => {
+    const checkVault = async () => {
+        try {
+            const bal = await getSolBalance();
+            setBalance(bal);
+
+            const existingAddress = await getVaultState();
+            if (existingAddress) {
+                setVaultAddress(existingAddress);
+                setStatus('registered');
+            } else {
+                setStatus('idle');
+            }
+        } catch (e) {
+            console.error("Failed to check vault:", e);
+            setStatus('idle');
+        }
+    };
+    checkVault();
+  }, [wallet]);
 
   const handleRegister = async () => {
     try {
@@ -21,9 +47,13 @@ export default function Dashboard() {
       const sig = await registerVault();
       setTxSig(sig);
       setStatus('success');
+
+      // Re-fetch to confirm and show the address
+      const addr = await getVaultState();
+      if(addr) setVaultAddress(addr);
+
     } catch (e: any) {
       console.error(e);
-
       if (e instanceof InsufficientFundsError) {
           setStatus('needs-funds');
       } else {
@@ -33,62 +63,179 @@ export default function Dashboard() {
     }
   };
 
-  if (!wallet) return <div>No Wallet Loaded</div>;
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  if (!wallet) return <div className="p-10 text-center font-sans text-muted-foreground">No Wallet Loaded</div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 text-slate-100 flex flex-col items-center">
-      <h1 className="text-2xl font-bold mb-6 bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
-        Dashboard
-      </h1>
+    <div className="min-h-screen bg-background p-4 text-foreground font-sans flex flex-col items-center gap-6 selection:bg-white/20">
+      <header className="text-center space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            QCash Wallet
+        </h1>
+        <p className="text-muted-foreground text-sm font-medium">Post-Quantum Solana Storage</p>
+      </header>
 
-      {status === 'needs-funds' ? (
+      {/* --- IDENTITY SECTION --- */}
+      <Card className="w-full max-w-md p-0 overflow-hidden shadow-sm border border-border bg-background">
+        <div className="p-5 space-y-5">
+            <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-foreground" />
+                Your Identity
+            </h2>
+
+            {/* Solana Address */}
+            <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                    <Wallet className="w-3.5 h-3.5" /> Solana Address
+                </label>
+                <div className="flex gap-2 group">
+                    <code className="flex-1 bg-secondary/30 border border-border rounded-lg p-3 text-xs font-mono text-foreground truncate select-all transition-colors">
+                        {wallet.solana_address}
+                    </code>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 shrink-0 hover:bg-secondary hover:text-foreground transition-colors rounded-lg border border-transparent"
+                        onClick={() => copyToClipboard(wallet.solana_address, 'sol')}
+                    >
+                        {copiedField === 'sol' ? <CheckCircle className="w-4 h-4 text-foreground" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                </div>
+            </div>
+
+            {/* Kyber Key */}
+            <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                    <Key className="w-3.5 h-3.5 text-foreground" /> Kyber-768 Key (Quantum)
+                </label>
+                <div className="flex gap-2 group">
+                    <code className="flex-1 bg-secondary/30 border border-border rounded-lg p-3 text-xs font-mono text-foreground truncate select-all transition-colors">
+                        {wallet.kyber_pubkey}
+                    </code>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 shrink-0 hover:bg-secondary hover:text-foreground transition-colors rounded-lg border border-transparent"
+                        onClick={() => copyToClipboard(wallet.kyber_pubkey, 'kyber')}
+                    >
+                        {copiedField === 'kyber' ? <CheckCircle className="w-4 h-4 text-foreground" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                </div>
+            </div>
+
+            {/* Vault Address */}
+            {(status === 'registered' || status === 'success') && vaultAddress && (
+                <div className="space-y-1.5 pt-4 border-t border-border">
+                    <label className="text-xs text-foreground flex items-center gap-2 font-bold">
+                        <Database className="w-3.5 h-3.5" /> On-Chain Vault PDA (Active)
+                    </label>
+                    <div className="flex gap-2 group">
+                        <code className="flex-1 bg-secondary/30 border border-border rounded-lg p-3 text-xs font-mono text-foreground truncate select-all transition-colors">
+                            {vaultAddress.toString()}
+                        </code>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0 hover:bg-secondary hover:text-foreground transition-colors rounded-lg border border-transparent"
+                            onClick={() => copyToClipboard(vaultAddress.toString(), 'pda')}
+                        >
+                            {copiedField === 'pda' ? <CheckCircle className="w-4 h-4 text-foreground" /> : <Copy className="w-4 h-4" />}
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
+
+        {/* Balance Footer */}
+        <div className="bg-secondary/10 p-4 border-t border-border flex justify-between items-center px-6">
+             <div className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                 <Wallet className="w-3.5 h-3.5" /> Balance
+             </div>
+             <div className="font-mono font-bold text-lg text-foreground">
+                 {balance !== null ? `${(balance / 1e9).toFixed(4)} SOL` : <span className="text-xs text-muted-foreground">Loading...</span>}
+             </div>
+         </div>
+      </Card>
+
+      {/* --- STATUS SECTION --- */}
+      {status === 'checking' ? (
+         <div className="flex items-center text-muted-foreground text-sm font-medium animate-pulse">
+            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            Connecting to Solana...
+         </div>
+      ) : status === 'needs-funds' ? (
         <FundWalletCard
             address={wallet.solana_address}
             minRequired="0.01"
             onRetry={handleRegister}
         />
       ) : (
-        <Card className="w-full max-w-md bg-slate-900 border-slate-800 p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-slate-200">System Status</h2>
+        <Card className="w-full max-w-md p-6 space-y-4 shadow-sm border border-border bg-background">
+            <h2 className="text-lg font-bold text-foreground">System Status</h2>
+
+            {status === 'registered' && (
+                <div className="p-4 bg-secondary/20 border border-border rounded-xl flex items-center gap-4">
+                    <div className="bg-secondary/40 p-2.5 rounded-full">
+                        <CheckCircle className="w-5 h-5 text-foreground" />
+                    </div>
+                    <div>
+                        <p className="text-foreground font-bold text-sm">Vault Active</p>
+                        <p className="text-muted-foreground text-xs mt-0.5">Ready to receive private funds.</p>
+                    </div>
+                </div>
+            )}
 
             {status === 'idle' && (
-                <div className="p-4 bg-slate-800/50 rounded border border-slate-700 flex items-center justify-between">
-                    <span className="text-sm text-slate-400">Vault not registered</span>
-                    <Button size="sm" onClick={handleRegister} className="bg-cyan-600 hover:bg-cyan-500">
+                <div className="p-4 bg-secondary/30 rounded-xl border border-border flex items-center justify-between gap-4">
+                    <span className="text-sm font-medium text-muted-foreground">Vault not registered</span>
+                    <Button size="sm" onClick={handleRegister} className="bg-foreground hover:bg-foreground/90 text-background font-medium border border-border">
                         Register On-Chain
                     </Button>
                 </div>
             )}
 
-            {status === 'loading' && (
-                <div className="flex items-center justify-center py-4 text-cyan-400">
-                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                    Checking Balance & Registering...
+              {status === 'loading' && (
+                <div className="flex flex-col items-center justify-center py-8 text-foreground space-y-4">
+                    <div className="relative">
+                        <Loader2 className="w-10 h-10 animate-spin relative z-10" />
+                    </div>
+                    <span className="text-sm font-medium animate-pulse">Registering Quantum Vault...</span>
                 </div>
             )}
 
             {status === 'success' && (
-                <div className="p-4 bg-emerald-900/20 border border-emerald-800 rounded">
-                    <div className="flex items-center text-emerald-400 mb-2">
-                        <CheckCircle className="w-5 h-5 mr-2" />
-                        <span className="font-bold">Vault Registered!</span>
+                <div className="p-4 bg-secondary/20 border border-border rounded-xl space-y-3">
+                    <div className="flex items-center text-foreground font-bold">
+                        <CheckCircle className="w-5 h-5 mr-2 text-foreground" />
+                        Vault Registered!
                     </div>
-                    <p className="text-xs text-slate-400 break-all">Tx: {txSig}</p>
+                    <div className="text-xs text-muted-foreground">
+                        <span className="font-medium">Tx Signature:</span>
+                        <div className="font-mono mt-1.5 break-all bg-secondary/40 border border-border p-2.5 rounded-lg text-foreground select-all">
+                            {txSig}
+                        </div>
+                    </div>
                 </div>
             )}
 
             {status === 'error' && (
-                <div className="p-4 bg-red-900/20 border border-red-800 rounded flex flex-col gap-2 text-red-400 text-sm">
-                    <div className="flex items-center">
-                        <AlertTriangle className="w-5 h-5 mr-2" />
-                        <span className="font-bold">Registration Failed</span>
+                <div className="p-4 bg-secondary/20 border border-border rounded-xl flex flex-col gap-2 text-foreground text-sm">
+                    <div className="flex items-center font-bold">
+                        <AlertTriangle className="w-5 h-5 mr-2 text-foreground" />
+                        Registration Failed
                     </div>
-                    <p className="text-xs opacity-80">{errorMsg}</p>
-                    <Button variant="outline" size="sm" onClick={() => setStatus('idle')} className="mt-2 border-red-800 text-red-400 hover:bg-red-950">
+                    <p className="text-xs text-muted-foreground pl-7">{errorMsg}</p>
+                    <Button variant="outline" size="sm" onClick={() => setStatus('idle')} className="mt-2 w-full border-border text-foreground hover:bg-secondary bg-transparent">
                         Try Again
                     </Button>
                 </div>
             )}
+
         </Card>
       )}
     </div>

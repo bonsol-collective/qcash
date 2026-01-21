@@ -14,6 +14,7 @@ import { useWasm } from "./useWasm";
 const NETWORK = "http://127.0.0.1:8899";
 const PROGRAM_ID = new PublicKey("AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD");
 const MIN_SOL_REQUIRED = 0.01 * web3.LAMPORTS_PER_SOL;
+const KYBER_KEY_LENGTH = 1184;
 
 export class InsufficientFundsError extends Error {
   constructor( address: string, currentBalance: number) {
@@ -27,6 +28,7 @@ export class InsufficientFundsError extends Error {
 export const useSolana = () => {
   const wallet = useWallet();
   const { getSolanaSecret, isReady: wasmReady } = useWasm();
+  const connection = new Connection(NETWORK,"confirmed");
 
   // const getProvider = ()=>{
   //     const connection = new Connection(NETWORK, "confirmed");
@@ -39,6 +41,48 @@ export const useSolana = () => {
   //     return provider;
   // }
 
+  const getSolBalance = async()=>{
+
+    if(!wallet?.wallet?.solana_address){
+      throw new Error("Solana Address not found");
+    }
+
+    const balance = await connection.getBalance(new PublicKey(wallet?.wallet?.solana_address));
+    return balance;
+  }
+
+  const deriveVaultPDA = async()=>{
+
+    if(!wallet?.wallet?.kyber_pubkey){
+      throw new Error("Kyber key not found");
+    }
+
+    const hash = await crypto.subtle.digest("SHA-256",Buffer.from(wallet.wallet.kyber_pubkey));
+    const hashArray = new Uint8Array(hash);
+
+    const [vault_pda,_bump] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("vault"),
+        hashArray
+      ],
+      PROGRAM_ID
+    )
+
+    return vault_pda;
+  }
+
+  const getVaultState = async():Promise<PublicKey|null>=>{
+    const vault_pda = await deriveVaultPDA();
+
+    const vault_info = await connection.getAccountInfo(vault_pda);
+
+    if (vault_info?.data.length != KYBER_KEY_LENGTH){
+      return null;
+    }
+
+    return vault_pda;
+  }
+
   const registerVault = async () => {
     if (!wallet || !wallet.wallet) {
       throw new Error("Wallet not connected");
@@ -47,8 +91,6 @@ export const useSolana = () => {
     if (!wasmReady) {
       throw new Error("WASM not initialized");
     }
-
-    const connection = new Connection(NETWORK, "confirmed");
 
     // // FOR TESTING, we are generating random public key
     // const payer = Keypair.generate();
@@ -110,19 +152,21 @@ export const useSolana = () => {
 
     // convert kyber key to buffer(Vec<u8>)
     const kyberBytes = utils.bytes.bs58.decode(
-      wallet.wallet?.kyber_pubkey || "",
+      wallet.wallet?.kyber_pubkey,
     );
 
     const hashBuffer = await crypto.subtle.digest("SHA-256",kyberBytes);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
 
-    const [vault_pda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("vault"),
-        Buffer.from(hashArray)
-      ],
-      PROGRAM_ID,
-    )
+    // const [vault_pda] = PublicKey.findProgramAddressSync(
+    //   [
+    //     Buffer.from("vault"),
+    //     Buffer.from(hashArray)
+    //   ],
+    //   PROGRAM_ID,
+    // )
+
+    const vault_pda = await deriveVaultPDA();
 
     // splitting data - use Buffer for Anchor bytes encoding
     const part1 = Buffer.from(kyberBytes.slice(0,700));
@@ -156,5 +200,5 @@ export const useSolana = () => {
 
   };
 
-  return { registerVault };
+  return { registerVault,getVaultState,getSolBalance };
 };
