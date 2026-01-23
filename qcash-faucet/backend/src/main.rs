@@ -1,18 +1,22 @@
-use std::{ str::FromStr, sync::Arc};
+use std::{  str::FromStr, sync::Arc};
 
 use actix_cors::Cors;
 use actix_web::{App, HttpResponse, HttpServer, Responder, get, post, web};
 use anchor_client::{Client, Cluster, solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::{SeedDerivable, Signer}}};
 use borsh::BorshDeserialize;
+use chacha20poly1305::{ChaCha20Poly1305, Key, KeyInit, Nonce, aead::{Aead}};
 use pqc_kyber::encapsulate;
 use qcash_core::UTXOEncryptedPayload;
 
-use rand::{TryRngCore, rngs::OsRng};
+use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
-const PROGRAM_ID:&str = "AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD";
-const KYBER_PUBKEY_SIZE:usize = 1186;
+const PROGRAM_ID:&str = "GS28r8XX2QjJRgMx93vogFotJzzX4C1Gqo8cE4S4bQ1k";
+const KYBER_PUBKEY_SIZE:usize = 1184;
+const LEDGER_SEED: &[u8] = b"ledger";
+const MIN_SOL_BALANCE: u64 = 100_000_000; // 0.1 SOL in lamports
+const RPC_URL:&str = "http://localhost:8899";
 
 struct AppState{
     authority: Arc<Keypair>,
@@ -51,8 +55,27 @@ async fn status(data:web::Data<AppState>)-> impl Responder{
 
 #[post("/airdrop")]
 async fn get_airdrop(data:web::Data<AppState>,req:web::Json<AirDropRequest>)->impl Responder{
-    println!("📩 Received Airdrop Request for Vault: {}", req.vault_pda);
+    println!("Received Airdrop Request for Vault: {}", req.vault_pda);
 
+    // Use the already-loaded authority from AppState
+    let authority_pubkey = data.authority.pubkey();
+
+    // Check if faucet has SOL balance
+    let solana_client = solana_client::rpc_client::RpcClient::new(RPC_URL);
+    // Convert anchor_client's Pubkey to solana_sdk's Pubkey
+    let authority_sdk_pubkey = solana_sdk::pubkey::Pubkey::new_from_array(authority_pubkey.to_bytes());
+    let balance = match solana_client.get_balance(&authority_sdk_pubkey) {
+        Ok(b) => b,
+        Err(e) => return HttpResponse::InternalServerError().json(ErrorResponse {
+            error: format!("Failed to fetch balance: {}", e)
+        })
+    };
+
+    if balance < MIN_SOL_BALANCE {
+        return HttpResponse::ServiceUnavailable().json(ErrorResponse {
+            error: "Insufficient SOL balance for faucet".into()
+        });
+    }
     // parse the string to pubkey
     let vault_pda = match Pubkey::from_str(&req.vault_pda){
         Ok(p)=>p,
@@ -92,38 +115,52 @@ async fn get_airdrop(data:web::Data<AppState>,req:web::Json<AirDropRequest>)->im
 
     if receiver_key_bytes.len() != KYBER_PUBKEY_SIZE {
         return HttpResponse::InternalServerError().json(ErrorResponse {
-            error: format!("On-Chain Kyber Key size mismatch. Expected {}, got {}", KYBER_PUBKEY_SIZE, receiver_bytes.len())
+            error: format!("On-Chain Kyber Key size mismatch. Expected {}, got {}", KYBER_PUBKEY_SIZE, receiver_key_bytes.len())
         });
     }
 
     let mut receiver_array = [0u8;KYBER_PUBKEY_SIZE];
-    receiver_array.copy_from_slice(&receiver_array);
+    receiver_array.copy_from_slice(&receiver_key_bytes);
 
     println!("Fetched Kyber Key from Chain");
 
-    // preparing payload
-
     // randomness
     let mut rng = OsRng;
-    let mut randomness = [0u8; 32];
-    rng.try_fill_bytes(&mut randomness).expect("Error filling bytes");
+    let mut payload_randomness = [0u8; 32];
+    rng.try_fill_bytes(&mut payload_randomness).expect("Error filling bytes");
+
+    // Encapsulate
+    let (ciphertext,shared_secret) = match encapsulate(&receiver_array, &mut rng){
+        Ok(res)=>res,
+        Err(_)=> return HttpResponse::InternalServerError().json(ErrorResponse { error: "Kyber Encapsulation Failed".into() })
+    };
 
     // construct Payload
     let utxo_payload = UTXOEncryptedPayload{
         amount:100,
         is_return:false,
         receiver_vault: receiver_array,
-        randomness,
+        randomness:payload_randomness,
         utxo_spent_list: vec![],
         version: 1,
     };
 
-    // encrypt
     let payload_bytes = bincode::serialize(&utxo_payload).expect("Serialization Failed");
-    let (ciphertext,_sharded_secret) = match encapsulate(&receiver_array, &mut rng){
-        Ok(res)=>res,
-        Err(_)=> return HttpResponse::InternalServerError().json(ErrorResponse { error: "Kyber Encapsulation Failed".into() })
+
+    // symmetric_encryption
+    let key = Key::from_slice(&shared_secret);
+    let cipher = ChaCha20Poly1305::new(key);
+    let mut nonce_bytes = [0u8; 12];
+    rng.fill_bytes(&mut  nonce_bytes);
+
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let encrypted_payload = match cipher.encrypt(nonce, payload_bytes.as_ref()){
+        Ok(ct)=>ct,
+        Err(_) => return HttpResponse::InternalServerError().json(ErrorResponse { error: "Symmetric Encryption Failed".into() }),
     };
+
+    println!("Encryption Complete {:?}",encrypted_payload);
 
     println!("KEM Success. Shared Secret Generated.");
 
@@ -167,6 +204,7 @@ async fn main()->std::io::Result<()> {
             .wrap(cors)
             .app_data(state.clone())
             .service(status)
+            .service(get_airdrop)
     })
     .bind(("0.0.0.0",3000))?
     .run()
