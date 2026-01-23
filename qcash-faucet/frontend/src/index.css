@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Inter+Tight:ital,wght@0,100..900;1,100..900&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: 0 0% 2.7%;    /* #070707 */
+  --foreground: 0 0% 100%;    /* #FFFFFF */
+
+  --card: 0 0% 2.7%;
+  --card-foreground: 0 0% 100%;
+
+  --popover: 0 0% 2.7%;
+  --popover-foreground: 0 0% 100%;
+
+  --primary: 0 0% 100%;       /* #FFFFFF */
+  --primary-foreground: 0 0% 0%; /* #000000 */
+
+  --secondary: 0 0% 9%;       /* #171717 */
+  --secondary-foreground: 0 0% 100%;
+
+  --muted: 0 0% 9%;
+  --muted-foreground: 240 1% 84%; /* #d4d4d7 */
+
+  --accent: 0 0% 9%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 0 0% 20%;
+  --input: 0 0% 20%;
+  --ring: 0 0% 100%;
+
+  --radius: 0.5rem;
+}
+
+@theme {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: #d4d4d7;
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --animate-spin-slow: spin 3s linear infinite;
+  --animate-fade-in: fadeIn 0.5s ease-out forwards;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  min-height: 100vh;
+  margin: 0;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
