@@ -22,4 +22,12 @@ pub mod solana_programs {
     pub fn complete_vault(ctx: Context<CompleteVault>, kyber_key_part2: Vec<u8>) -> Result<()> {
         complete_vault::complete_vault(ctx, kyber_key_part2)
     }
+
+    pub fn init_ledger(ctx: Context<InitLedger>) -> Result<()> {
+        init_ledger::init_ledger(ctx)
+    }
+
+    pub fn append_to_ledger(ctx: Context<AppendLedger>, utxo: Utxo) -> Result<()> {
+        append_to_ledger::append_to_ledger(ctx, utxo)
+    }
 }

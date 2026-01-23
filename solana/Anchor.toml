@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-qcash_program = "AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD"
+qcash = "AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD"
 
 [registry]
 url = "https://api.apr.dev"

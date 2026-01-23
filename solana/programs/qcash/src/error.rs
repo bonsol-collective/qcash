@@ -10,4 +10,7 @@ pub enum ErrorCode {
 
     #[msg("Hash Mismatch: Provided key does not match the expected hash")]
     HashMismatch,
+
+    #[msg("Invalid previous UTXO hash provided")]
+    InvalidHashMismatch,
 }

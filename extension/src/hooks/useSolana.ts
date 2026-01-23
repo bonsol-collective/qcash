@@ -81,9 +81,9 @@ export const useSolana = () => {
 
     const vault_info = await connection.getAccountInfo(vault_pda);
 
-    console.log("Vault_info",vault_info?.data.length);
+    console.log("Vault_info",vault_info);
 
-    if (vault_info?.data.length == 0 ){
+    if (!vault_info){
       return null;
     }
 

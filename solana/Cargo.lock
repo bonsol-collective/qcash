@@ -1277,7 +1277,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "qcash_programs"
+name = "qcash"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",

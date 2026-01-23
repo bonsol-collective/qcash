@@ -37,10 +37,6 @@ export default function Welcome() {
           Import Seed Phrase
         </Button>
       </div>
-
-      <div className="absolute bottom-6 text-xs text-muted-foreground/50 font-mono">
-        v0.1.0-alpha • Powered by RISC Zero
-      </div>
     </div>
   );
 }
