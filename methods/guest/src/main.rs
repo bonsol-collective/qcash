@@ -10,7 +10,8 @@ fn main(){
 
     // Cost: Moderate (~500k cycles), but necessary for security.
     let my_keys = derive_kyber_key(&inputs.sender_private_key_fragment);
-    let my_pubkey_bytes = my_keys.public; // [u8; 1184]
+    // Hash the Kyber pubkey (1184 bytes) to get a 32-byte vault identifier
+    let my_vault_hash = hash_pubkey(&my_keys.public);
 
     let mut total_in_amount:u64 = 0;
 
@@ -26,7 +27,7 @@ fn main(){
 
         // Verify Ownership
         // In Prod: Kyber.decapsulate(utxo.payload, input.sender_private_key)
-        if utxo.payload.receiver_vault != my_pubkey_bytes {
+        if utxo.payload.receiver_vault != my_vault_hash {
             panic!("Ownership Error: I cannot spend this UTXO. It belongs to someone else.");
         }
 
@@ -66,7 +67,7 @@ fn main(){
     let receiver_payload = UTXOEncryptedPayload{
         amount : inputs.amount_to_send,
         is_return:false,
-        receiver_vault:inputs.receiver_pubkey,
+        receiver_vault: hash_pubkey(&inputs.receiver_pubkey),
         randomness: inputs.receiver_randomness,
         utxo_spent_list: propagated_history.clone(),
         version: 1,
@@ -80,7 +81,7 @@ fn main(){
         is_return:true,
         // In reality, this should be the SENDER'S vault.
         // For POC we reuse receiver_pubkey or derive from SK.
-        receiver_vault: my_pubkey_bytes,
+        receiver_vault: my_vault_hash,
         randomness: inputs.return_randomness,
         utxo_spent_list: propagated_history,
         version: 1,
@@ -100,6 +101,13 @@ fn main(){
 
     env::commit(&output);
 
+}
+
+/// Hash a Kyber public key (1184 bytes) to a 32-byte vault identifier
+fn hash_pubkey(pubkey: &[u8; 1184]) -> [u8; 32] {
+    let mut hasher = Sha256::<Impl>::new();
+    hasher.update(pubkey);
+    hasher.finalize().into()
 }
 
 fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
