@@ -2,8 +2,8 @@ use std::{  str::FromStr, sync::Arc};
 
 use actix_cors::Cors;
 use actix_web::{App, HttpResponse, HttpServer, Responder, get, post, web};
-use anchor_client::{Client, Cluster, solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::{SeedDerivable, Signer}}};
-use borsh::BorshDeserialize;
+use anchor_client::{Client, Cluster, anchor_lang::prelude::system_program, solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::{SeedDerivable, Signer}}};
+use borsh::{BorshDeserialize, BorshSerialize};
 use chacha20poly1305::{ChaCha20Poly1305, Key, KeyInit, Nonce, aead::{Aead}};
 use pqc_kyber::encapsulate;
 use qcash_core::UTXOEncryptedPayload;
@@ -11,12 +11,33 @@ use qcash_core::UTXOEncryptedPayload;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 const PROGRAM_ID:&str = "GS28r8XX2QjJRgMx93vogFotJzzX4C1Gqo8cE4S4bQ1k";
 const KYBER_PUBKEY_SIZE:usize = 1184;
 const LEDGER_SEED: &[u8] = b"ledger";
 const MIN_SOL_BALANCE: u64 = 100_000_000; // 0.1 SOL in lamports
 const RPC_URL:&str = "http://localhost:8899";
+
+// Mirror Struct
+#[derive(BorshSerialize)]
+struct UploadCiphertextArgs{
+    pub ciphertext:[u8;1088]
+}
+
+#[derive(BorshSerialize)]
+struct TransferArgs{
+    pub encrypted_payload:Vec<u8>,
+    pub nonce:[u8;12],
+}
+
+// Sha256("global:<function_name>")
+pub fn get_discriminator(name:&str)->Vec<u8>{
+    let mut hasher = Sha256::new();
+    hasher.update(format!("global:{}",name).as_bytes());
+    let result = hasher.finalize();
+    result[..8].to_vec()
+}
 
 struct AppState{
     authority: Arc<Keypair>,
@@ -57,7 +78,6 @@ async fn status(data:web::Data<AppState>)-> impl Responder{
 async fn get_airdrop(data:web::Data<AppState>,req:web::Json<AirDropRequest>)->impl Responder{
     println!("Received Airdrop Request for Vault: {}", req.vault_pda);
 
-    // Use the already-loaded authority from AppState
     let authority_pubkey = data.authority.pubkey();
 
     // Check if faucet has SOL balance
@@ -168,18 +188,74 @@ async fn get_airdrop(data:web::Data<AppState>,req:web::Json<AirDropRequest>)->im
     let loader_keypair = Keypair::new();
     let loader_pubkey = loader_keypair.pubkey();
 
-    let (ledger_pda,_) = Pubkey::find_program_address(&["ledger".as_bytes()], &data.program_id);
+    let mut ct_array = [0u8;1088];
+    ct_array.copy_from_slice(ciphertext.as_ref());
 
-    println!("Uploading Ciphertext to loader: {}", loader_pubkey);
+    let mut upload_ix_data = get_discriminator("upload_ciphertext");
+    let upload_args = UploadCiphertextArgs{
+        ciphertext:ct_array
+    };
+    upload_ix_data.extend_from_slice(&borsh::to_vec(&upload_args).unwrap());
 
-    let upload_discriminator:[u8;8] = [0u8;8];
+    // Build Ix 1
+    // Used anchor_client's re-exported solana_sdk to avoid version conflicts
+    use anchor_client::solana_sdk::instruction::{Instruction, AccountMeta};
+    let sig1 = program.request().instruction(
+        Instruction{
+            program_id:data.program_id,
+            accounts: vec![
+                AccountMeta::new(loader_pubkey, true),
+                AccountMeta::new(data.authority.pubkey(),true),
+                AccountMeta::new_readonly(system_program::ID,false)
+            ],
+            data: upload_ix_data,
+        }
+    )
+    .signer(&loader_keypair)
+    .signer(&*data.authority)
+    .send();
 
-    // let signature_upload = program.
+    if let Err(e) = sig1 {
+        return HttpResponse::InternalServerError().json(ErrorResponse{
+            error: format!("Upload Failed: {}",e)
+        });
+    }
 
-    return HttpResponse::BadRequest().json(ErrorResponse{
-        error:"jdjd".into()
-    });
+    // Transfer Ix
 
+    let (ledger_pda,_) = Pubkey::find_program_address(&[b"ledger"], &data.program_id);
+
+    // Build Ix 2
+    let mut transfer_ix_data = get_discriminator("transfer");
+    let transfer_args = TransferArgs{
+        encrypted_payload,
+        nonce:nonce_bytes
+    };
+
+    transfer_ix_data.extend_from_slice(&borsh::to_vec(&transfer_args).unwrap());
+
+    let sig2 = program.request()
+            .instruction(solana_sdk::instruction::Instruction{
+                program_id:data.program_id,
+                accounts:vec![
+                    solana_sdk::instruction::AccountMeta::new(data.authority.pubkey(), true),
+                    solana_sdk::instruction::AccountMeta::new(ledger_pda, false),
+                    solana_sdk::instruction::AccountMeta::new(loader_pubkey, false),
+                    solana_sdk::instruction::AccountMeta::new_readonly(system_program::ID, false)
+                ],
+                data: transfer_ix_data
+            })
+            .signer(&*data.authority)
+            .send();
+
+    match sig2 {
+        Ok(s)=> HttpResponse::Ok().json(AirDropResponse{
+            signature:s.to_string(),
+            utxo_hash: "Pending".into()
+        }),
+        Err(e)=> HttpResponse::InternalServerError().json(ErrorResponse { error: format!("Transfer Failed: {}", e) }),
+
+    }
 }
 
 #[actix_web::main]
@@ -206,7 +282,6 @@ async fn main()->std::io::Result<()> {
         program_id,
         client
     });
-
 
     HttpServer::new(move ||{
         // TODO: Change the CORS settings before deploying to production
