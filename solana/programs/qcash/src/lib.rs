@@ -9,7 +9,7 @@ pub use constants::*;
 pub use handlers::*;
 pub use state::*;
 
-declare_id!("AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD");
+declare_id!("GS28r8XX2QjJRgMx93vogFotJzzX4C1Gqo8cE4S4bQ1k");
 
 #[program]
 pub mod solana_programs {
@@ -29,5 +29,13 @@ pub mod solana_programs {
 
     pub fn append_to_ledger(ctx: Context<AppendLedger>, utxo: Utxo) -> Result<()> {
         append_to_ledger::append_to_ledger(ctx, utxo)
+    }
+
+    pub fn upload_ciphertext(ctx: Context<UploadCipherText>, ciphertext: [u8; 1088]) -> Result<()> {
+        upload_ciphertext::upload_ciphertext(ctx, ciphertext)
+    }
+
+    pub fn transfer(ctx: Context<Transfer>, encrypted_payload: Vec<u8>, nonce: [u8; 12]) -> Result<()> {
+        transfer::transfer(ctx, encrypted_payload, nonce)
     }
 }

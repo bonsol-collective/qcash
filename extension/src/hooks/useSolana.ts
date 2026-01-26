@@ -12,7 +12,7 @@ import idl from "../idl/qcash_program.json";
 import { useWasm } from "./useWasm";
 
 const NETWORK = "http://127.0.0.1:8899";
-const PROGRAM_ID = new PublicKey("AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD");
+const PROGRAM_ID = new PublicKey("GS28r8XX2QjJRgMx93vogFotJzzX4C1Gqo8cE4S4bQ1k");
 const MIN_SOL_REQUIRED = 0.01 * web3.LAMPORTS_PER_SOL;
 
 export class InsufficientFundsError extends Error {

@@ -139,7 +139,7 @@ async fn get_airdrop(data:web::Data<AppState>,req:web::Json<AirDropRequest>)->im
     let utxo_payload = UTXOEncryptedPayload{
         amount:100,
         is_return:false,
-        receiver_vault: receiver_array,
+        receiver_vault: vault_pda.to_bytes(),
         randomness:payload_randomness,
         utxo_spent_list: vec![],
         version: 1,
@@ -151,7 +151,7 @@ async fn get_airdrop(data:web::Data<AppState>,req:web::Json<AirDropRequest>)->im
     let key = Key::from_slice(&shared_secret);
     let cipher = ChaCha20Poly1305::new(key);
     let mut nonce_bytes = [0u8; 12];
-    rng.fill_bytes(&mut  nonce_bytes);
+    rng.try_fill_bytes(&mut  nonce_bytes).expect("Error filling bytes");
 
     let nonce = Nonce::from_slice(&nonce_bytes);
 
@@ -162,7 +162,19 @@ async fn get_airdrop(data:web::Data<AppState>,req:web::Json<AirDropRequest>)->im
 
     println!("Encryption Complete {:?}",encrypted_payload);
 
-    println!("KEM Success. Shared Secret Generated.");
+    // The Loader Pattern
+    // Create a temporary Loader Account
+    // This account will hold the 1088 bytes kyber ciphertext
+    let loader_keypair = Keypair::new();
+    let loader_pubkey = loader_keypair.pubkey();
+
+    let (ledger_pda,_) = Pubkey::find_program_address(&["ledger".as_bytes()], &data.program_id);
+
+    println!("Uploading Ciphertext to loader: {}", loader_pubkey);
+
+    let upload_discriminator:[u8;8] = [0u8;8];
+
+    // let signature_upload = program.
 
     return HttpResponse::BadRequest().json(ErrorResponse{
         error:"jdjd".into()

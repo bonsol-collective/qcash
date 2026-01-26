@@ -3,9 +3,13 @@ pub mod complete_vault;
 pub mod init_program;
 pub mod init_ledger;
 pub mod append_to_ledger;
+pub mod upload_ciphertext;
+pub mod transfer;
 
 pub use init_vault::*;
 pub use complete_vault::*;
 pub use init_program::*;
 pub use init_ledger::*;
 pub use append_to_ledger::*;
+pub use upload_ciphertext::*;
+pub use transfer::*;

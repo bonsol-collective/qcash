@@ -1,5 +1,5 @@
 {
-  "address": "AFdP6ozXCdssyUwFiiny7CixRRBL5KkJtxw8U3EFCWYD",
+  "address": "GS28r8XX2QjJRgMx93vogFotJzzX4C1Gqo8cE4S4bQ1k",
   "metadata": {
     "name": "solana_programs",
     "version": "0.1.0",
@@ -7,6 +7,59 @@
     "description": "Created with Anchor"
   },
   "instructions": [
+    {
+      "name": "append_to_ledger",
+      "discriminator": [
+        18,
+        23,
+        229,
+        238,
+        97,
+        223,
+        54,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "utxo",
+          "type": {
+            "defined": {
+              "name": "Utxo"
+            }
+          }
+        }
+      ]
+    },
     {
       "name": "complete_vault",
       "discriminator": [
@@ -31,6 +84,50 @@
           "type": "bytes"
         }
       ]
+    },
+    {
+      "name": "init_ledger",
+      "discriminator": [
+        91,
+        194,
+        32,
+        83,
+        92,
+        206,
+        54,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "ledger",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "init_vault",
@@ -96,6 +193,19 @@
   ],
   "accounts": [
     {
+      "name": "Ledger",
+      "discriminator": [
+        43,
+        41,
+        21,
+        213,
+        180,
+        176,
+        95,
+        32
+      ]
+    },
+    {
       "name": "Vault",
       "discriminator": [
         211,
@@ -124,9 +234,97 @@
       "code": 6002,
       "name": "HashMismatch",
       "msg": "Hash Mismatch: Provided key does not match the expected hash"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidHashMismatch",
+      "msg": "Invalid previous UTXO hash provided"
     }
   ],
   "types": [
+    {
+      "name": "Ledger",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "count",
+            "type": "u64"
+          },
+          {
+            "name": "utxos",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "Utxo"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Utxo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "epoch",
+            "type": "u32"
+          },
+          {
+            "name": "utxo_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "prev_utxo_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ciphertext_commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "nonce",
+            "type": {
+              "array": [
+                "u8",
+                12
+              ]
+            }
+          },
+          {
+            "name": "encrypted_payload",
+            "type": "bytes"
+          },
+          {
+            "name": "kyber_ciphertext",
+            "type": {
+              "array": [
+                "u8",
+                1088
+              ]
+            }
+          }
+        ]
+      }
+    },
     {
       "name": "Vault",
       "type": {

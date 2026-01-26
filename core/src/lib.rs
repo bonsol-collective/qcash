@@ -27,7 +27,7 @@ pub struct UTXOEncryptedPayload{
     pub amount:u64,
     pub is_return:bool,
     #[serde(with = "serde_arrays")]
-    pub receiver_vault: KyberPubKey,
+    pub receiver_vault: [u8;32],
     pub randomness:[u8;32],
     pub utxo_spent_list:Vec<HASH>,
     pub version:u8,
@@ -38,6 +38,7 @@ pub struct QSPVGuestInput{
     pub sender_private_key_fragment:[u8;32],
     pub input_utxos:Vec<DecryptedInput>,
     #[serde(with = "serde_arrays")]
+    // [u8;32]
     pub receiver_pubkey:KyberPubKey,
     pub amount_to_send:u64,
     pub receiver_randomness:[u8;32],
