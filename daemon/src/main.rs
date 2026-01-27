@@ -24,7 +24,7 @@ struct WalletDB{
 enum Request{
     Init,
     // Debug: Mint a UTXO so we have something to spend
-    Faucet {amount:u64},
+    // Faucet {amount:u64},
     Send { receiver:String,amount:u64  }
 }
 
@@ -84,63 +84,63 @@ fn handle(req:Request)->Response{
                     "kyber_public_key": bs58::encode(keys.kyber_key.public).into_string()
                 }) }
         },
-        Request::Faucet{amount}=>{
+        // Request::Faucet{amount}=>{
 
-            if db.mnemonic.is_empty(){
-                return Response {
-                    status: "error".into(),
-                    data: serde_json::json!({"msg": "Wallet not initialized"})
-                };
-            }
+        //     if db.mnemonic.is_empty(){
+        //         return Response {
+        //             status: "error".into(),
+        //             data: serde_json::json!({"msg": "Wallet not initialized"})
+        //         };
+        //     }
 
-            let keys = WalletKeys::from_mnemonic(&db.mnemonic);
+        //     let keys = WalletKeys::from_mnemonic(&db.mnemonic);
 
-            // Manually Creating a UTXO for testing
-            let mock_payload = UTXOEncryptedPayload{
-                amount,
-                is_return: false,
-                receiver_vault: keys.kyber_key.public,
-                randomness: [1u8; 32],
-                utxo_spent_list: vec![],
-                version: 1,
-            };
+        //     // Manually Creating a UTXO for testing
+        //     let mock_payload = UTXOEncryptedPayload{
+        //         amount,
+        //         is_return: false,
+        //         receiver_vault: keys.kyber_key.public,
+        //         randomness: [1u8; 32],
+        //         utxo_spent_list: vec![],
+        //         version: 1,
+        //     };
 
-            // Calculate the payload hash (must match guest program's hash_payload function)
-            let mut hasher = Sha256::new();
-            hasher.update(mock_payload.amount.to_le_bytes());
-            hasher.update(mock_payload.receiver_vault);
-            hasher.update(mock_payload.randomness);
-            for h in &mock_payload.utxo_spent_list {
-                hasher.update(h);
-            }
-            let ciphertext_commitment: [u8; 32] = hasher.finalize().into();
+        //     // Calculate the payload hash (must match guest program's hash_payload function)
+        //     let mut hasher = Sha256::new();
+        //     hasher.update(mock_payload.amount.to_le_bytes());
+        //     hasher.update(mock_payload.receiver_vault);
+        //     hasher.update(mock_payload.randomness);
+        //     for h in &mock_payload.utxo_spent_list {
+        //         hasher.update(h);
+        //     }
+        //     let ciphertext_commitment: [u8; 32] = hasher.finalize().into();
 
-            // Calculate the UTXO hash
-            let mut hasher = Sha256::new();
-            hasher.update(ciphertext_commitment);
-            hasher.update(db.last_ledger_tip);
-            hasher.update(1u32.to_le_bytes()); // epoch
-            let utxo_hash: [u8; 32] = hasher.finalize().into();
+        //     // Calculate the UTXO hash
+        //     let mut hasher = Sha256::new();
+        //     hasher.update(ciphertext_commitment);
+        //     hasher.update(db.last_ledger_tip);
+        //     hasher.update(1u32.to_le_bytes()); // epoch
+        //     let utxo_hash: [u8; 32] = hasher.finalize().into();
 
-            let mock_header = UTXOCommitmentHeader{
-                utxo_hash,
-                prev_utxo_hash: db.last_ledger_tip,
-                ciphertext_commitment,
-                epoch: 1,
-            };
+        //     let mock_header = UTXOCommitmentHeader{
+        //         utxo_hash,
+        //         prev_utxo_hash: db.last_ledger_tip,
+        //         ciphertext_commitment,
+        //         epoch: 1,
+        //     };
 
-            // In real app, we must match the hashing logic exactly or proof fails
-            // For now, assumes this is a valid  UTXO from history
+        //     // In real app, we must match the hashing logic exactly or proof fails
+        //     // For now, assumes this is a valid  UTXO from history
 
-            db.unspent_utxos.push(DecryptedInput{
-                header:mock_header,
-                payload:mock_payload,
-            });
+        //     db.unspent_utxos.push(DecryptedInput{
+        //         header:mock_header,
+        //         payload:mock_payload,
+        //     });
 
-            save(&db);
+        //     save(&db);
 
-            Response { status: "success".into(), data: serde_json::json!({"msg": "Faucet Received"}) }
-        },
+        //     Response { status: "success".into(), data: serde_json::json!({"msg": "Faucet Received"}) }
+        // },
         Request::Send{receiver,amount}=>{
 
             if db.unspent_utxos.is_empty(){

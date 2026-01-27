@@ -15,3 +15,8 @@ console_error_panic_hook = "0.1.7"
 getrandom = { version = "0.2", features = ["js"] }
 bs58 = {version="0.5.1"}
 hex = "0.4.3"
+pqc_kyber = "0.7.1"
+rand = "=0.8"
+chacha20poly1305 = "0.10.1"
+bincode = "1.3"
+

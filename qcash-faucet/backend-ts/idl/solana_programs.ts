@@ -1,14 +1,20 @@
-{
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/solana_programs.json`.
+ */
+export type SolanaPrograms = {
   "address": "DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT",
   "metadata": {
-    "name": "solana_programs",
+    "name": "solanaPrograms",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
   },
   "instructions": [
     {
-      "name": "append_to_ledger",
+      "name": "appendToLedger",
       "discriminator": [
         18,
         23,
@@ -45,7 +51,7 @@
           }
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -54,14 +60,14 @@
           "name": "utxo",
           "type": {
             "defined": {
-              "name": "Utxo"
+              "name": "utxo"
             }
           }
         }
       ]
     },
     {
-      "name": "complete_vault",
+      "name": "completeVault",
       "discriminator": [
         13,
         122,
@@ -80,13 +86,13 @@
       ],
       "args": [
         {
-          "name": "kyber_key_part2",
+          "name": "kyberKeyPart2",
           "type": "bytes"
         }
       ]
     },
     {
-      "name": "init_ledger",
+      "name": "initLedger",
       "discriminator": [
         91,
         194,
@@ -123,14 +129,14 @@
           }
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "init_vault",
+      "name": "initVault",
       "discriminator": [
         77,
         79,
@@ -164,19 +170,19 @@
               },
               {
                 "kind": "arg",
-                "path": "key_hash"
+                "path": "keyHash"
               }
             ]
           }
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "key_hash",
+          "name": "keyHash",
           "type": {
             "array": [
               "u8",
@@ -185,7 +191,7 @@
           }
         },
         {
-          "name": "kyber_key_part1",
+          "name": "kyberKeyPart1",
           "type": "bytes"
         }
       ]
@@ -232,13 +238,13 @@
           "writable": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "encrypted_payload",
+          "name": "encryptedPayload",
           "type": "bytes"
         },
         {
@@ -253,7 +259,7 @@
       ]
     },
     {
-      "name": "upload_ciphertext",
+      "name": "uploadCiphertext",
       "discriminator": [
         117,
         226,
@@ -276,7 +282,7 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -295,7 +301,7 @@
   ],
   "accounts": [
     {
-      "name": "Ledger",
+      "name": "ledger",
       "discriminator": [
         43,
         41,
@@ -308,7 +314,7 @@
       ]
     },
     {
-      "name": "Loader",
+      "name": "loader",
       "discriminator": [
         107,
         205,
@@ -321,7 +327,7 @@
       ]
     },
     {
-      "name": "Vault",
+      "name": "vault",
       "discriminator": [
         211,
         8,
@@ -337,28 +343,28 @@
   "errors": [
     {
       "code": 6000,
-      "name": "InvalidKeyLength",
+      "name": "invalidKeyLength",
       "msg": "Kyber Public key must be exactly 1184 bytes long"
     },
     {
       "code": 6001,
-      "name": "ChunkSizeExceeded",
+      "name": "chunkSizeExceeded",
       "msg": "Chunk size exceeds maximum allowed length of 800 bytes"
     },
     {
       "code": 6002,
-      "name": "HashMismatch",
+      "name": "hashMismatch",
       "msg": "Hash Mismatch: Provided key does not match the expected hash"
     },
     {
       "code": 6003,
-      "name": "InvalidHashMismatch",
+      "name": "invalidHashMismatch",
       "msg": "Invalid previous UTXO hash provided"
     }
   ],
   "types": [
     {
-      "name": "Ledger",
+      "name": "ledger",
       "type": {
         "kind": "struct",
         "fields": [
@@ -371,7 +377,7 @@
             "type": {
               "vec": {
                 "defined": {
-                  "name": "Utxo"
+                  "name": "utxo"
                 }
               }
             }
@@ -380,7 +386,7 @@
       }
     },
     {
-      "name": "Loader",
+      "name": "loader",
       "type": {
         "kind": "struct",
         "fields": [
@@ -397,7 +403,7 @@
       }
     },
     {
-      "name": "Utxo",
+      "name": "utxo",
       "type": {
         "kind": "struct",
         "fields": [
@@ -406,7 +412,7 @@
             "type": "u32"
           },
           {
-            "name": "utxo_hash",
+            "name": "utxoHash",
             "type": {
               "array": [
                 "u8",
@@ -415,7 +421,7 @@
             }
           },
           {
-            "name": "prev_utxo_hash",
+            "name": "prevUtxoHash",
             "type": {
               "array": [
                 "u8",
@@ -424,7 +430,7 @@
             }
           },
           {
-            "name": "ciphertext_commitment",
+            "name": "ciphertextCommitment",
             "type": {
               "array": [
                 "u8",
@@ -442,11 +448,11 @@
             }
           },
           {
-            "name": "encrypted_payload",
+            "name": "encryptedPayload",
             "type": "bytes"
           },
           {
-            "name": "kyber_ciphertext",
+            "name": "kyberCiphertext",
             "type": {
               "array": [
                 "u8",
@@ -458,7 +464,7 @@
       }
     },
     {
-      "name": "Vault",
+      "name": "vault",
       "type": {
         "kind": "struct",
         "fields": [
@@ -471,7 +477,7 @@
             "type": "u8"
           },
           {
-            "name": "kyber_pubkey",
+            "name": "kyberPubkey",
             "type": "bytes"
           }
         ]
@@ -480,9 +486,9 @@
   ],
   "constants": [
     {
-      "name": "SEED",
+      "name": "seed",
       "type": "string",
       "value": "\"anchor\""
     }
   ]
-}
+};

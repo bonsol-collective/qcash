@@ -12,11 +12,11 @@ import idl from "../idl/qcash_program.json";
 import { useWasm } from "./useWasm";
 
 const NETWORK = "http://127.0.0.1:8899";
-const PROGRAM_ID = new PublicKey("GS28r8XX2QjJRgMx93vogFotJzzX4C1Gqo8cE4S4bQ1k");
+const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
 const MIN_SOL_REQUIRED = 0.01 * web3.LAMPORTS_PER_SOL;
 
 export class InsufficientFundsError extends Error {
-  constructor( address: string, currentBalance: number) {
+  constructor(address: string, currentBalance: number) {
     super(
       `Insufficient SOL. Address: ${address} has ${currentBalance / 1e9} SOL.`
     );
@@ -27,7 +27,7 @@ export class InsufficientFundsError extends Error {
 export const useSolana = () => {
   const wallet = useWallet();
   const { getSolanaSecret, isReady: wasmReady } = useWasm();
-  const connection = new Connection(NETWORK,"confirmed");
+  const connection = new Connection(NETWORK, "confirmed");
 
   // const getProvider = ()=>{
   //     const connection = new Connection(NETWORK, "confirmed");
@@ -40,9 +40,9 @@ export const useSolana = () => {
   //     return provider;
   // }
 
-  const getSolBalance = async()=>{
+  const getSolBalance = async () => {
 
-    if(!wallet?.wallet?.solana_address){
+    if (!wallet?.wallet?.solana_address) {
       throw new Error("Solana Address not found");
     }
 
@@ -50,18 +50,18 @@ export const useSolana = () => {
     return balance;
   }
 
-  const deriveVaultPDA = async()=>{
+  const deriveVaultPDA = async () => {
 
-    if(!wallet?.wallet?.kyber_pubkey){
+    if (!wallet?.wallet?.kyber_pubkey) {
       throw new Error("Kyber key not found");
     }
 
     const kyberKeyBytes = utils.bytes.bs58.decode(wallet.wallet.kyber_pubkey);
 
-    const hash = await crypto.subtle.digest("SHA-256",kyberKeyBytes);
+    const hash = await crypto.subtle.digest("SHA-256", kyberKeyBytes);
     const hashArray = Array.from(new Uint8Array(hash));
 
-    const [vault_pda,_bump] = PublicKey.findProgramAddressSync(
+    const [vault_pda, _bump] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("vault"),
         Buffer.from(hashArray)
@@ -69,21 +69,21 @@ export const useSolana = () => {
       PROGRAM_ID
     )
 
-    console.log("Vault_pda",vault_pda.toString());
+    console.log("Vault_pda", vault_pda.toString());
 
     return vault_pda;
   }
 
-  const getVaultState = async():Promise<PublicKey|null>=>{
+  const getVaultState = async (): Promise<PublicKey | null> => {
     const vault_pda = await deriveVaultPDA();
 
-    console.log("Vault_pda",vault_pda.toString());
+    console.log("Vault_pda", vault_pda.toString());
 
     const vault_info = await connection.getAccountInfo(vault_pda);
 
-    console.log("Vault_info",vault_info);
+    console.log("Vault_info", vault_info);
 
-    if (!vault_info){
+    if (!vault_info) {
       return null;
     }
 
@@ -114,12 +114,12 @@ export const useSolana = () => {
     const payer = Keypair.fromSecretKey(secretBytes);
     console.log("Payer Public Key:", payer.publicKey.toString());
 
-    if(payer.publicKey.toString() != wallet.wallet.solana_address){
+    if (payer.publicKey.toString() != wallet.wallet.solana_address) {
       throw new Error("Derived key does not match Wallet Address! Derivation mismatch.");
     }
 
     const balance = await connection.getBalance(payer.publicKey);
-    if(balance < MIN_SOL_REQUIRED){
+    if (balance < MIN_SOL_REQUIRED) {
       throw new InsufficientFundsError(payer.publicKey.toString(), balance);
     }
 
@@ -153,7 +153,7 @@ export const useSolana = () => {
       }),
     );
 
-    if(!wallet.wallet?.kyber_pubkey){
+    if (!wallet.wallet?.kyber_pubkey) {
       throw new Error("Kyber key not found");
     }
 
@@ -162,7 +162,7 @@ export const useSolana = () => {
       wallet.wallet?.kyber_pubkey,
     );
 
-    const hashBuffer = await crypto.subtle.digest("SHA-256",kyberBytes);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", kyberBytes);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
 
     const [vault_pda] = PublicKey.findProgramAddressSync(
@@ -176,18 +176,18 @@ export const useSolana = () => {
     // const vault_pda = await deriveVaultPDA();
 
     // splitting data - use Buffer for Anchor bytes encoding
-    const part1 = Buffer.from(kyberBytes.slice(0,700));
+    const part1 = Buffer.from(kyberBytes.slice(0, 700));
     const part2 = Buffer.from(kyberBytes.slice(700));
 
     const tx1 = await program.methods
-    .initVault(hashArray, part1)
-    .accounts({
-      vault:vault_pda,
-      signer:payer.publicKey,
-      systemProgram:web3.SystemProgram.programId,
-    })
-    .signers([payer])
-    .rpc();
+      .initVault(hashArray, part1)
+      .accounts({
+        vault: vault_pda,
+        signer: payer.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .signers([payer])
+      .rpc();
 
     console.log("Part 1 Confirmed:", tx1);
     await connection.confirmTransaction(tx1);
@@ -207,5 +207,5 @@ export const useSolana = () => {
 
   };
 
-  return { registerVault,getVaultState,getSolBalance };
+  return { registerVault, getVaultState, getSolBalance };
 };

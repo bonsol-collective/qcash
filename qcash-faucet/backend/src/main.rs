@@ -13,7 +13,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const PROGRAM_ID:&str = "GS28r8XX2QjJRgMx93vogFotJzzX4C1Gqo8cE4S4bQ1k";
+const PROGRAM_ID:&str = "DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT";
 const KYBER_PUBKEY_SIZE:usize = 1184;
 const LEDGER_SEED: &[u8] = b"ledger";
 const MIN_SOL_BALANCE: u64 = 100_000_000; // 0.1 SOL in lamports
@@ -275,7 +275,7 @@ async fn main()->std::io::Result<()> {
     let client = Arc::new(client);
     let program_id = Pubkey::from_str(PROGRAM_ID).expect("Unable to parse program Id");
 
-    println!("✅ Authority Loaded: {}", pubkey);
+    println!("Authority Loaded: {}", pubkey);
 
     let state = web::Data::new(AppState{
         authority,
