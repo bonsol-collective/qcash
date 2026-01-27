@@ -1,11 +1,14 @@
 import express from "express";
 import cors from "cors";
 import * as anchor from "@coral-xyz/anchor";
-import { Keypair, PublicKey } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 // import { Program, AnchorProvider, setProvider } from "@anchor-lang/core";
-import idl from "../idl/solana_programs.json" with {type: "json"};
-import type { SolanaPrograms } from "../idl/solana_programs.js";
+import idl from "./idl/solana_programs.json" with {type: "json"};
+import type { SolanaPrograms } from "./idl/solana_programs.ts";
 import * as wasm from "qcash-wasm";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -14,9 +17,10 @@ app.use(express.json());
 const port = process.env.PORT || 3000;
 const programId = process.env.PROGRAM_ID!;
 const connection = new anchor.web3.Connection("http://127.0.0.1:8899", "confirmed");
-const faucetKeypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(process.env.FAUCET_KEYPAIR!)));
+const faucetKeypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(process.env.FAUCET_KEY!)));
 const wallet = new anchor.Wallet(faucetKeypair);
 const provider = new anchor.AnchorProvider(connection, wallet);
+const CHUNKS_SIZE = 600;
 
 const program = new anchor.Program<SolanaPrograms>(idl as SolanaPrograms, provider);
 
@@ -56,7 +60,7 @@ app.post("/airdrop", async (req, res) => {
         const encryptedPayload = Uint8Array.from(payloadResult.encrypted_payload);
         const nonce = Uint8Array.from(payloadResult.nonce);
 
-        console.log("Payload Encrypted successfully", payloadResult);
+        console.log("Payload Encrypted successfully", payloadResult.encrypted_payload);
 
         // Execute Transaction
         const loaderKeypair = Keypair.generate();
@@ -65,7 +69,8 @@ app.post("/airdrop", async (req, res) => {
         const loaderSize = 8 + 1088; // Discriminator + Ciphertext size
 
         // Ix 1 : Upload Ciphertext
-        const uploadTx = await program.methods.uploadCiphertext(Array.from(ciphertext))
+        // - init Loader
+        const initTx = await program.methods.initLoader()
             .accounts({
                 loader: loaderKeypair.publicKey,
                 signer: faucetKeypair.publicKey,
@@ -73,6 +78,29 @@ app.post("/airdrop", async (req, res) => {
             .signers([loaderKeypair, faucetKeypair])
             .rpc();
 
+        console.log("Loader Initialized", initTx);
+
+        // - Upload Chunks
+        // We split 1088 bytes into 2 chunks of 600 bytes 
+        const totalSize = ciphertext.length;
+        let offset = 0;
+
+        while (offset < totalSize) {
+            const end = Math.min(offset + CHUNKS_SIZE, totalSize);
+            const chunk = ciphertext.slice(offset, end);
+
+            await program.methods.writeLoader(offset, Buffer.from(chunk))
+                .accounts({
+                    loader: loaderKeypair.publicKey,
+                    signer: faucetKeypair.publicKey,
+                })
+                .signers([loaderKeypair])
+                .rpc();
+
+            offset = end;
+        }
+
+        // Ix 2 : Transfer
         const [ledgerPda] = PublicKey.findProgramAddressSync(
             [Buffer.from("ledger")],
             program.programId

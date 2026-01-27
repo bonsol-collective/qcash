@@ -136,6 +136,36 @@ export type SolanaPrograms = {
       "args": []
     },
     {
+      "name": "initLoader",
+      "discriminator": [
+        216,
+        113,
+        137,
+        7,
+        85,
+        181,
+        168,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "loader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initVault",
       "discriminator": [
         77,
@@ -259,42 +289,35 @@ export type SolanaPrograms = {
       ]
     },
     {
-      "name": "uploadCiphertext",
+      "name": "writeLoader",
       "discriminator": [
-        117,
-        226,
-        27,
-        145,
+        50,
+        101,
+        230,
         10,
-        131,
-        170,
-        246
+        73,
+        217,
+        42,
+        209
       ],
       "accounts": [
         {
           "name": "signer",
-          "writable": true,
           "signer": true
         },
         {
           "name": "loader",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
+          "writable": true
         }
       ],
       "args": [
         {
-          "name": "ciphertext",
-          "type": {
-            "array": [
-              "u8",
-              1088
-            ]
-          }
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
         }
       ]
     }
@@ -360,6 +383,11 @@ export type SolanaPrograms = {
       "code": 6003,
       "name": "invalidHashMismatch",
       "msg": "Invalid previous UTXO hash provided"
+    },
+    {
+      "code": 6004,
+      "name": "payloadTooLarge",
+      "msg": "Payload too large"
     }
   ],
   "types": [

@@ -18,7 +18,7 @@ function App() {
 
     try {
       await axios.post('http://localhost:3000/airdrop', {
-        vault_pda: vaultPda
+        address: vaultPda
       });
 
       setStatus('success');
@@ -89,11 +89,10 @@ function App() {
 
           {/* Status Messages */}
           {status !== 'idle' && (
-            <div className={`mt-6 rounded-lg border p-4 ${
-              status === 'success'
+            <div className={`mt-6 rounded-lg border p-4 ${status === 'success'
                 ? 'border-green-500/20 bg-green-500/10 text-green-400'
                 : 'border-red-500/20 bg-red-500/10 text-red-400'
-            } animate-fade-in`}>
+              } animate-fade-in`}>
               <div className="flex items-start gap-3">
                 {status === 'success' ? (
                   <CheckCircle2 className="h-5 w-5 shrink-0" />

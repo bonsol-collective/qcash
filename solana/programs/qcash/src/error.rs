@@ -13,4 +13,7 @@ pub enum ErrorCode {
 
     #[msg("Invalid previous UTXO hash provided")]
     InvalidHashMismatch,
+
+    #[msg("Payload too large")]
+    PayloadTooLarge,
 }

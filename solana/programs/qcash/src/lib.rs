@@ -31,8 +31,12 @@ pub mod solana_programs {
         append_to_ledger::append_to_ledger(ctx, utxo)
     }
 
-    pub fn upload_ciphertext(ctx: Context<UploadCipherText>, ciphertext: [u8; 1088]) -> Result<()> {
-        upload_ciphertext::upload_ciphertext(ctx, ciphertext)
+    pub fn init_loader(ctx: Context<InitLoader>) -> Result<()> {
+        upload_ciphertext::init_loader(ctx)
+    }
+
+    pub fn write_loader(ctx: Context<WriteLoader>, offset: u32, data: Vec<u8>) -> Result<()> {
+        upload_ciphertext::write_loader(ctx, offset, data)
     }
 
     pub fn transfer(ctx: Context<Transfer>, encrypted_payload: Vec<u8>, nonce: [u8; 12]) -> Result<()> {
