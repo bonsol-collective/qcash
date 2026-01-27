@@ -61,7 +61,7 @@ function App() {
                 value={vaultPda}
                 onChange={(e) => setVaultPda(e.target.value)}
                 placeholder="Enter your Vault PDA address..."
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20 transition-all placeholder:text-neutral-500"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 mt-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20 transition-all placeholder:text-neutral-500"
                 required
               />
             </div>
@@ -90,8 +90,8 @@ function App() {
           {/* Status Messages */}
           {status !== 'idle' && (
             <div className={`mt-6 rounded-lg border p-4 ${status === 'success'
-                ? 'border-green-500/20 bg-green-500/10 text-green-400'
-                : 'border-red-500/20 bg-red-500/10 text-red-400'
+              ? 'border-green-500/20 bg-green-500/10 text-green-400'
+              : 'border-red-500/20 bg-red-500/10 text-red-400'
               } animate-fade-in`}>
               <div className="flex items-start gap-3">
                 {status === 'success' ? (

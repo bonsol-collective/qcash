@@ -4,6 +4,7 @@ export interface WalletData{
     mnemonic: string;
     solana_address: string;
     kyber_pubkey: string;
+    kyber_secret_key: number[];  // For background sync
     secret_entropy_hex: string;
 }
 
@@ -45,10 +46,13 @@ export const WalletProvider = ({children}:{children:ReactNode})=>{
         setWalletState(newWallet);
         if(newWallet){
             // save
-            if(typeof chrome !== "undefined" && chrome.storage && chrome.storage.local){
-                chrome.storage.local.set({qcash_wallet:newWallet});
-            }else{
-                localStorage.setItem("qcash_wallet",JSON.stringify(newWallet));
+            if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set({
+                    qcash_wallet: newWallet,
+                    kyber_secret_key: newWallet.kyber_secret_key  // For background sync
+                });
+            } else {
+                localStorage.setItem("qcash_wallet", JSON.stringify(newWallet));
             }
         }else{
             // Clear

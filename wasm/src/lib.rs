@@ -1,8 +1,8 @@
 use qcash_core::wallet::WalletKeys;
-use qcash_core::{KYBER_PUBKEY_SIZE};
+use qcash_core::{KYBER_PUBKEY_SIZE,KYBER_CIPHERTEXT_SIZE};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
-use pqc_kyber::encapsulate as pqc_encapsulate; 
+use pqc_kyber::{encapsulate as pqc_encapsulate,decapsulate as pqc_decapsulate}; 
 use rand::rngs::OsRng;
 use rand::RngCore;
 use chacha20poly1305::{ChaCha20Poly1305, Key, KeyInit, Nonce, aead::{Aead}};
@@ -100,11 +100,63 @@ pub fn encrypt_payload(shared_secret:&[u8],receiver_vault_bytes:&[u8],amount:u64
     })
 }
 
+#[wasm_bindgen]
+pub struct DecryptUtxo{
+    pub amount: u64,
+    #[wasm_bindgen(getter_with_clone)]
+    pub randomness: Vec<u8>,
+    pub is_return:bool,
+    pub index:u32, // helps frontend track position
+}
+
+#[wasm_bindgen]
+pub fn try_decrypt_utxo(
+    secret_key_bytes:&[u8],
+    ciphertext:&[u8], //1088 bytes
+    nonce:&[u8],
+    encrypted_payload:&[u8],
+    index:u32, // index in the ledger array
+)->Result<DecryptUtxo,String>{
+    if ciphertext.len() != KYBER_CIPHERTEXT_SIZE {
+        return Err("Invalid Ciphertext Size".into());
+    };
+
+    // getting the shared secret 
+    let shared_secret = match pqc_decapsulate(ciphertext,secret_key_bytes){
+        Ok(s)=> s,
+        Err(_)=> return Err("Decapsulation Failed".into()),
+    };
+
+    // attempting decryption
+    let key = Key::from_slice(&shared_secret);
+    let cipher = ChaCha20Poly1305::new(key);
+    let nonce_obj = Nonce::from_slice(nonce);
+
+    // If decryption failed that means utxo is not for us
+    let decrypted_bytes = match cipher.decrypt(nonce_obj, encrypted_payload){
+        Ok(decrypted_bytes) =>decrypted_bytes,
+        Err(_)=> return Err("Not our UTXO(Decryption Failed)".into())
+    };
+
+    // Deserialize the payload 
+    let payload:UTXOEncryptedPayload = bincode::deserialize(&decrypted_bytes)
+        .map_err(|_| "Deserializtaion Failed".to_string())?;
+
+    Ok(DecryptUtxo { 
+        amount: payload.amount, 
+        randomness: payload.randomness.to_vec(), 
+        is_return:  payload.is_return,
+        index,
+    })
+
+}
+
 #[derive(Serialize)]
 pub struct WalletResult{
     pub mnemonic: String,
     pub solana_address:String,
     pub kyber_pubkey:String,
+    pub kyber_secret_key: Vec<u8>,  // For background sync
     pub secret_entropy_hex:String, // 32 bytes hex
 }
 
@@ -116,6 +168,7 @@ pub fn generate_wallet()->JsValue{
         mnemonic: keys.mnemonic.clone(),
         solana_address: keys.get_solana_address(),
         kyber_pubkey: bs58::encode(keys.kyber_key.public).into_string(),
+        kyber_secret_key: keys.kyber_key.secret.to_vec(),
         secret_entropy_hex: hex::encode(keys.secret_entropy),
     };
 
@@ -134,6 +187,7 @@ pub fn restore_wallet(mnemonic:&str)->Result<JsValue,String>{
         mnemonic:keys.mnemonic.clone(),
         solana_address:keys.get_solana_address(),
         kyber_pubkey:bs58::encode(keys.kyber_key.public).into_string(),
+        kyber_secret_key: keys.kyber_key.secret.to_vec(),
         secret_entropy_hex:hex::encode(keys.secret_entropy),
     };
 
