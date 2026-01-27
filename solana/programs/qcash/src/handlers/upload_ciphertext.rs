@@ -25,8 +25,6 @@ pub fn init_loader(ctx:Context<InitLoader>)->Result<()>{
 
 #[derive(Accounts)]
 pub struct WriteLoader<'info>{
-    pub signer:Signer<'info>,
-
     #[account(mut)]
     pub loader: Account<'info,Loader>,
 }

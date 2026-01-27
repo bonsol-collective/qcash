@@ -302,10 +302,6 @@ export type SolanaPrograms = {
       ],
       "accounts": [
         {
-          "name": "signer",
-          "signer": true
-        },
-        {
           "name": "loader",
           "writable": true
         }

@@ -92,7 +92,6 @@ app.post("/airdrop", async (req, res) => {
             await program.methods.writeLoader(offset, Buffer.from(chunk))
                 .accounts({
                     loader: loaderKeypair.publicKey,
-                    signer: faucetKeypair.publicKey,
                 })
                 .signers([loaderKeypair])
                 .rpc();
