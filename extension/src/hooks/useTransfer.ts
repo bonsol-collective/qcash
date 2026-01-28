@@ -10,18 +10,6 @@ import * as wasm from '../wasm/qcash_wasm';
 
 const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
 
-// interface QSPVGuestInput {
-//     sender_private_key_fragment:[u8;32],
-//     input_utxos:Vec<DecryptedInput>,
-//     // We use serde_arrays because default serde struggles with array > 32 bytes
-//     #[serde(with = "serde_arrays")]
-//     receiver_pubkey:KyberPubKey,
-//     amount_to_send:u64,
-//     receiver_randomness:[u8;32],
-//     return_randomness:[u8;32],
-//     current_ledger_tip:HASH,
-// }
-
 export const useTransfer = () => {
     const { connection } = useSolana();
     const { utxos, syncNow: scanLedger } = useLedgerSync();
@@ -141,9 +129,23 @@ export const useTransfer = () => {
                 // Have to provide the secret key 
                 sender_private_key_fragment: Array.from(keys.seed),
                 input_utxos: inputs.map(u => ({
-                    // TODO: Need to store the full OnChain Data (header) in useLeaderSync
-                    amount: u.amount,
-                    randomness: u.randomness,
+                    header: {
+                        utxo_hash: u.header.utxoHash,
+                        prev_utxo_hash: u.header.prevUtxoHash,
+                        ciphertext_commitment: u.header.ciphertextCommitment,
+                        epoch: u.header.epoch,
+                        kyber_ciphertext: u.header.kyberCiphertext,
+                        nonce: u.header.nonce,
+                        encrypted_payload: [] // TODO:Empty vec 
+                    },
+                    payload: {
+                        amount: u.amount,
+                        is_return: u.isReturn,
+                        receiver_vault: Array.from(new PublicKey(keys.vaultPda).toBuffer()), // Todo: CHECK IT
+                        randomness: u.randomness,
+                        utxo_spent_list: [], // TODO: Track history
+                        version: 1
+                    }
                 })),
                 amount_to_send: amountToSend,
                 receiver_pubkey: Array.from(receiverKey),

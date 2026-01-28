@@ -129,6 +129,7 @@ pub fn try_decrypt_utxo(
     };
 
     // getting the shared secret 
+    // If this fails, the ciphertext was not encrypted for our Public Key.
     let shared_secret = match pqc_decapsulate(ciphertext,secret_key_bytes){
         Ok(s)=> s,
         Err(_)=> return Err("Decapsulation Failed".into()),

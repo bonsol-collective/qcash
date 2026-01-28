@@ -1,5 +1,5 @@
 import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
-import init,{try_decrypt_utxo} from "./wasm/qcash_wasm";
+import init, { try_decrypt_utxo } from "./wasm/qcash_wasm";
 import * as anchor from "@coral-xyz/anchor";
 import idl from "./idl/qcash_program.json";
 import type { SolanaPrograms } from "./idl/solana_programs.ts";
@@ -15,6 +15,14 @@ interface SyncedUtxo {
     amount: number;
     randomness: number[];
     is_return: boolean;
+    header: {
+        utxoHash: number[];
+        prevUtxoHash: number[];
+        ciphertextCommitment: number[];
+        epoch: number;
+        kyberCiphertext: number[];
+        nonce: number[];
+    }
 }
 
 let wasmInitialized = false;
@@ -80,12 +88,12 @@ async function syncLedger() {
             existingUtxos[existingUtxos.length - 1].index : -1;
 
         // Fetch data on chain
-        const connection = new Connection(RPC_URL,"confirmed");
+        const connection = new Connection(RPC_URL, "confirmed");
         const dummyPubkey = Keypair.generate().publicKey;
         const readOnlyWallet = createReadOnlyWallet(dummyPubkey);
-        const provider = new anchor.AnchorProvider(connection,readOnlyWallet);
+        const provider = new anchor.AnchorProvider(connection, readOnlyWallet);
 
-        const program = new anchor.Program<SolanaPrograms>(idl,provider);
+        const program = new anchor.Program<SolanaPrograms>(idl, provider);
 
         const [ledgerPda] = PublicKey.findProgramAddressSync(
             [new TextEncoder().encode("ledger")],
@@ -95,39 +103,46 @@ async function syncLedger() {
         // TODO: Use Qfire instead
         const ledgerAccount = await program.account.ledger.fetch(ledgerPda);
         const allOnChainUtxos = ledgerAccount.utxos;
-
-        const newDecryptedUtxos = [];
+        const newDecryptedUtxos: SyncedUtxo[] = [];
 
         // looping through the utxos we haven't read till now 
-        for(let i = lastIndex+1;i<allOnChainUtxos.length;i++){
+        for (let i = lastIndex + 1; i < allOnChainUtxos.length; i++) {
             const rawUtxo = allOnChainUtxos[i];
-            try{
+            try {
                 // raw bytes fro WASM
                 const ciphertext = Uint8Array.from(rawUtxo.kyberCiphertext);
                 const nonce = Uint8Array.from(rawUtxo.nonce);
                 const payload = Uint8Array.from(rawUtxo.encryptedPayload);
 
-                const decrypted = try_decrypt_utxo(secretKey,ciphertext,nonce,payload,i);
+                const decrypted = try_decrypt_utxo(secretKey, ciphertext, nonce, payload, i);
 
                 console.log(`Found UTXO! Amount: ${decrypted.amount}`);
 
                 newDecryptedUtxos.push({
-                    amount:Number(decrypted.amount),
-                    isReturn:decrypted.is_return,
-                    randomness:Array.from(decrypted.randomness),
-                    index:i
+                    amount: Number(decrypted.amount),
+                    is_return: decrypted.is_return,
+                    randomness: Array.from(decrypted.randomness),
+                    index: i,
+                    header: {
+                        utxoHash: Array.from(rawUtxo.utxoHash),
+                        prevUtxoHash: Array.from(rawUtxo.prevUtxoHash),
+                        ciphertextCommitment: Array.from(rawUtxo.ciphertextCommitment),
+                        epoch: rawUtxo.epoch,
+                        kyberCiphertext: Array.from(rawUtxo.kyberCiphertext),
+                        nonce: Array.from(rawUtxo.nonce)
+                    }
                 });
 
-            }catch(e){
+            } catch (e) {
                 // not our money. skipping
             }
         }
 
-        if(newDecryptedUtxos.length > 0){
-            const updatedList = [...existingUtxos,...newDecryptedUtxos];
+        if (newDecryptedUtxos.length > 0) {
+            const updatedList = [...existingUtxos, ...newDecryptedUtxos];
             await chrome.storage.local.set({
-                synced_utxos:updatedList,
-                last_sync_time:Date.now(),
+                synced_utxos: updatedList,
+                last_sync_time: Date.now(),
             })
         }
 
