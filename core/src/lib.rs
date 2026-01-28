@@ -43,7 +43,7 @@ pub struct QSPVGuestInput{
     // The guest will regenerate the key from seed
     pub sender_private_key_fragment:[u8;32],
     // The list of all the notes we are spending
-    pub input_utxos:Vec<DecryptedInput>,
+    pub input_utxos:Vec<DecryptedInput>, // must be ordered oldest to newest
     // We use serde_arrays because default serde struggles with array > 32 bytes
     #[serde(with = "serde_arrays")]
     pub receiver_pubkey:KyberPubKey,
@@ -52,6 +52,7 @@ pub struct QSPVGuestInput{
     // The guest uses this to verify the encyrption matches.
     pub receiver_randomness:[u8;32],
     pub return_randomness:[u8;32],
+    // The latest hash on chain
     pub current_ledger_tip:HASH,
 }
 

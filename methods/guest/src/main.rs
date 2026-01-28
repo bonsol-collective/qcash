@@ -8,7 +8,8 @@ risc0_zkvm::guest::entry!(main);
 fn main(){
     let inputs:QSPVGuestInput  = env::read();
 
-    // Cost: Moderate (~500k cycles), but necessary for security.
+    // 1) Recover Keys from seed
+    // This proves that "I know the private key corresponding to this seed"
     let my_keys = derive_kyber_key(&inputs.sender_private_key_fragment);
     // Hash the Kyber pubkey (1184 bytes) to get a 32-byte vault identifier
     let my_vault_hash = hash_pubkey(&my_keys.public);
@@ -17,8 +18,10 @@ fn main(){
 
     let mut propagated_history:Vec<HASH> = Vec::new();
 
-    for utxo in &inputs.input_utxos{
+    for (i,utxo) in &inputs.input_utxos.enumerate(){
 
+        // Integrity Check (commitment == Hash(payload))
+        // This proves: "The data I am showing matches the encrypted data "
         let calculated_payload_hash = hash_payload(&utxo.payload);
 
         if calculated_payload_hash != utxo.header.ciphertext_commitment {
@@ -26,14 +29,9 @@ fn main(){
         }
 
         // Verify Ownership
-        // In Prod: Kyber.decapsulate(utxo.payload, input.sender_private_key)
         if utxo.payload.receiver_vault != my_vault_hash {
             panic!("Ownership Error: I cannot spend this UTXO. It belongs to someone else.");
         }
-
-        // Double spend prevention (History Check)
-        // Ensure the UTXO's Hash is not in your own history
-
 
         // Spend list propogation
         // Union of all prev history
@@ -46,6 +44,7 @@ fn main(){
             propagated_history.push(*past_hash);
         }
 
+        // mark this input as spent
         // Append current UTXO hash
         if propagated_history.contains(&utxo.header.utxo_hash){
             panic!("Double Spend Detected: UTXO is already in history (Cycle)");
@@ -73,20 +72,20 @@ fn main(){
         version: 1,
     };
 
+    // The new utxo links to the global tip
     let receiver_header = create_header(&receiver_payload,inputs.current_ledger_tip,1);
 
     // Output B: Return UTXO
     let return_payload = UTXOEncryptedPayload{
         amount:return_amount,
         is_return:true,
-        // In reality, this should be the SENDER'S vault.
-        // For POC we reuse receiver_pubkey or derive from SK.
         receiver_vault: my_vault_hash,
         randomness: inputs.return_randomness,
         utxo_spent_list: propagated_history,
         version: 1,
     };
 
+    // The second output links to the first output we just created
     let return_header = create_header(
         &return_payload,
         receiver_header.utxo_hash,
@@ -111,8 +110,9 @@ fn hash_pubkey(pubkey: &[u8; 1184]) -> [u8; 32] {
 }
 
 fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
-    let mut hasher = Sha256::<Impl>::new();
+    let mut hasher = Sha256::new();
     hasher.update(payload.amount.to_le_bytes());
+    hasher.update(&[payload.is_return as u8]);
     hasher.update(payload.receiver_vault);
     hasher.update(payload.randomness);
     for h in &payload.utxo_spent_list { hasher.update(h); }
@@ -120,8 +120,8 @@ fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
 }
 
 fn create_header(payload: &UTXOEncryptedPayload, prev_hash: HASH, epoch: u32) -> UTXOCommitmentHeader {
-    let c_commitment = hash_payload(payload);
-    let mut hasher = Sha256::<Impl>::new();
+   let c_commitment = hash_payload(payload);
+    let mut hasher = Sha256::new();
     hasher.update(c_commitment);
     hasher.update(prev_hash);
     hasher.update(epoch.to_le_bytes());
@@ -132,5 +132,8 @@ fn create_header(payload: &UTXOEncryptedPayload, prev_hash: HASH, epoch: u32) ->
         prev_utxo_hash: prev_hash,
         ciphertext_commitment: c_commitment,
         epoch,
+        kyber_ciphertext: [0u8; 1088], 
+        nonce: [0u8; 12],              
+        encrypted_payload: vec![],     
     }
 }
