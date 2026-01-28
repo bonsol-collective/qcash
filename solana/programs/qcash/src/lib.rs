@@ -39,6 +39,14 @@ pub mod solana_programs {
         upload_ciphertext::write_loader(ctx, offset, data)
     }
 
+    pub fn init_zk_proof(ctx: Context<InitZkProof>, total_bytes: u32) -> Result<()> {
+        upload_zk_proof::init_zk_proof(ctx, total_bytes)
+    }
+
+    pub fn write_zk_proof(ctx: Context<WriteZkProof>, offset: u32, chunk: Vec<u8>) -> Result<()> {
+        upload_zk_proof::write_zk_proof(ctx, offset, chunk)
+    }
+
     pub fn transfer(ctx: Context<Transfer>, encrypted_payload: Vec<u8>, nonce: [u8; 12]) -> Result<()> {
         transfer::transfer(ctx, encrypted_payload, nonce)
     }

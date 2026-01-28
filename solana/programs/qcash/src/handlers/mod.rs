@@ -5,6 +5,7 @@ pub mod init_ledger;
 pub mod append_to_ledger;
 pub mod upload_ciphertext;
 pub mod transfer;
+pub mod upload_zk_proof;
 
 pub use init_vault::*;
 pub use complete_vault::*;
@@ -13,3 +14,4 @@ pub use init_ledger::*;
 pub use append_to_ledger::*;
 pub use upload_ciphertext::*;
 pub use transfer::*;
+pub use upload_zk_proof::*;
