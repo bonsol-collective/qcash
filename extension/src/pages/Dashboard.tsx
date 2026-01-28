@@ -99,7 +99,6 @@ export default function Dashboard() {
                 )}
             </header>
 
-            {/* --- IDENTITY SECTION --- */}
             <Card className="w-full max-w-md p-0 overflow-hidden shadow-sm border border-border bg-background">
                 <div className="p-5 space-y-5">
                     <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
@@ -283,7 +282,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-3xl font-bold tracking-tight text-foreground">
-                            {privateBalance} <span className="text-lg text-muted-foreground">QSOL</span>
+                            {privateBalance} <span className="text-lg text-muted-foreground">QCASH</span>
                         </div>
                     </CardContent>
                 </Card>

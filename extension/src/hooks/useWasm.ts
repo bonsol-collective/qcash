@@ -19,7 +19,12 @@ export const useWasm = ()=>{
         }
 
         const result = await generate_wallet();
-        console.log(result);
+        console.log("WASM generate_wallet result:", result);
+        console.log("kyber_secret_key exists:", !!result.kyber_secret_key);
+        console.log("kyber_secret_key type:", typeof result.kyber_secret_key);
+        if (result.kyber_secret_key) {
+            console.log("kyber_secret_key length:", result.kyber_secret_key.length);
+        }
         return result;
     }
 

@@ -58,7 +58,7 @@ export const useSolana = () => {
 
     const kyberKeyBytes = utils.bytes.bs58.decode(wallet.wallet.kyber_pubkey);
 
-    const hash = await crypto.subtle.digest("SHA-256", kyberKeyBytes);
+    const hash = await crypto.subtle.digest("SHA-256", new Uint8Array(kyberKeyBytes));
     const hashArray = Array.from(new Uint8Array(hash));
 
     const [vault_pda, _bump] = PublicKey.findProgramAddressSync(
@@ -162,7 +162,7 @@ export const useSolana = () => {
       wallet.wallet?.kyber_pubkey,
     );
 
-    const hashBuffer = await crypto.subtle.digest("SHA-256", kyberBytes);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", new Uint8Array(kyberBytes));
     const hashArray = Array.from(new Uint8Array(hashBuffer));
 
     const [vault_pda] = PublicKey.findProgramAddressSync(

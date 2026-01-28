@@ -1,10 +1,13 @@
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import init,{try_decrypt_utxo} from "./wasm/qcash_wasm";
 import * as anchor from "@coral-xyz/anchor";
 import idl from "./idl/qcash_program.json";
-import type {SolanaPrograms} from "./idl/solana_programs";
+import type { SolanaPrograms } from "./idl/solana_programs.ts";
 
-const PROGRAM_ID = new PublicKey(import.meta.env.VITE_PROGRAM_ID);
+// @ts-ignore - Vite provides this at build time
+import wasmUrl from "./wasm/qcash_wasm_bg.wasm?url";
+
+// const PROGRAM_ID = new PublicKey(import.meta.env.VITE_PROGRAM_ID);
 const RPC_URL = import.meta.env.VITE_RPC_URL;
 
 interface SyncedUtxo {
@@ -13,6 +16,8 @@ interface SyncedUtxo {
     randomness: number[];
     is_return: boolean;
 }
+
+let wasmInitialized = false;
 
 // runs every 5 min
 chrome.runtime.onInstalled.addListener(() => {
@@ -28,19 +33,34 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 })
 
 // Listening to manual sync from UI
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === "START_SYNC") {
         syncLedger().then(() => sendResponse("Synced"))
         return true; // keep the message channel for async response
     }
 })
 
+function createReadOnlyWallet(publicKey: PublicKey) {
+    return {
+        publicKey,
+        signTransaction: async <T extends Transaction | VersionedTransaction>(_tx: T): Promise<T> => { throw new Error("Read-only wallet"); },
+        signAllTransactions: async <T extends Transaction | VersionedTransaction>(_txs: T[]): Promise<T[]> => { throw new Error("Read-only wallet"); },
+    };
+}
+
 async function syncLedger() {
     try {
         console.log("Background Sync started")
 
-        // initializing the environment
-        await init();
+        // Initialize WASM with explicit URL for Chrome extension context
+        if (!wasmInitialized) {
+            // Convert relative path to chrome-extension:// URL
+            const fullWasmUrl = chrome.runtime.getURL(wasmUrl);
+            console.log("Loading WASM from:", fullWasmUrl);
+            await init(fullWasmUrl);
+            wasmInitialized = true;
+            console.log("WASM initialized in background");
+        }
 
         // load user state
         const storage = await chrome.storage.local.get(['kyber_secret_key', 'synced_utxos']);
@@ -59,18 +79,16 @@ async function syncLedger() {
         const lastIndex = existingUtxos.length > 0 ?
             existingUtxos[existingUtxos.length - 1].index : -1;
 
-        // Fetch data on chain 
+        // Fetch data on chain
         const connection = new Connection(RPC_URL,"confirmed");
-        const newKeypair = new Keypair();
-
-        await connection.requestAirdrop(newKeypair.publicKey,2*LAMPORTS_PER_SOL);
-        const wallet = new anchor.Wallet(newKeypair);
-        const provider = new anchor.AnchorProvider(connection,wallet);
+        const dummyPubkey = Keypair.generate().publicKey;
+        const readOnlyWallet = createReadOnlyWallet(dummyPubkey);
+        const provider = new anchor.AnchorProvider(connection,readOnlyWallet);
 
         const program = new anchor.Program<SolanaPrograms>(idl,provider);
 
         const [ledgerPda] = PublicKey.findProgramAddressSync(
-            [Buffer.from("ledger")],
+            [new TextEncoder().encode("ledger")],
             program.programId
         );
 

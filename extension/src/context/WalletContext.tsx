@@ -28,7 +28,13 @@ export const WalletProvider = ({children}:{children:ReactNode})=>{
             chrome.storage.local.get(["qcash_wallet"],(result)=>{
                 if(result.qcash_wallet){
                     console.log("Wallet loaded from storage");
-                    setWalletState(result.qcash_wallet as WalletData);
+                    const loadedWallet = result.qcash_wallet as WalletData;
+                    setWalletState(loadedWallet);
+
+                    // Ensure kyber_secret_key is stored for background sync
+                    if (loadedWallet.kyber_secret_key) {
+                        chrome.storage.local.set({ kyber_secret_key: loadedWallet.kyber_secret_key });
+                    }
                 }
                 setIsLoading(false);
             })

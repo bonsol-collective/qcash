@@ -64,8 +64,8 @@ app.post("/airdrop", async (req, res) => {
 
         // Execute Transaction
         const loaderKeypair = Keypair.generate();
-        const airdrop = await connection.requestAirdrop(loaderKeypair.publicKey, 1);
-        console.log("Airdrop", airdrop);
+        // const airdrop = await connection.requestAirdrop(loaderKeypair.publicKey, 1);
+        // console.log("Airdrop", airdrop);
         const loaderSize = 8 + 1088; // Discriminator + Ciphertext size
 
         // Ix 1 : Upload Ciphertext
@@ -75,7 +75,7 @@ app.post("/airdrop", async (req, res) => {
                 loader: loaderKeypair.publicKey,
                 signer: faucetKeypair.publicKey,
             })
-            .signers([loaderKeypair, faucetKeypair])
+            .signers([loaderKeypair])
             .rpc();
 
         console.log("Loader Initialized", initTx);
@@ -93,7 +93,7 @@ app.post("/airdrop", async (req, res) => {
                 .accounts({
                     loader: loaderKeypair.publicKey,
                 })
-                .signers([loaderKeypair])
+                .signers([])
                 .rpc();
 
             offset = end;

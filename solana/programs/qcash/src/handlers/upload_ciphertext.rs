@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{Loader,error::ErrorCode};
+use crate::{KYBER_CIPHERTEXT_SIZE, Loader, error::ErrorCode};
 
 #[derive(Accounts)]
 pub struct InitLoader<'info>{
@@ -36,7 +36,7 @@ pub fn write_loader(ctx:Context<WriteLoader>,offset:u32,data:Vec<u8>)->Result<()
     let start = offset as usize;
     let end = start + data.len();
     
-    require!(end <= Loader::LEN,ErrorCode::PayloadTooLarge);
+    require!(end <= KYBER_CIPHERTEXT_SIZE,ErrorCode::PayloadTooLarge);
 
     loader.ciphertext[start..end].copy_from_slice(&data);
 
