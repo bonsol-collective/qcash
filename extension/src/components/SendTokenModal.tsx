@@ -1,8 +1,9 @@
 import { Send, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
+import { useTransfer } from '../hooks/useTransfer';
 
 interface SendTokenModalProps {
     isOpen: boolean;
@@ -13,6 +14,7 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const {prepareTransaction, status} = useTransfer();
 
     if (!isOpen) return null;
 
@@ -24,6 +26,16 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
             onClose();
         }, 2000);
     };
+
+    useEffect(()=>{
+        if(recipient.length >= 32){
+            const timer = setTimeout(()=>{
+                prepareTransaction(recipient);
+            },500)
+
+            return ()=> clearTimeout(timer);
+        }
+    },[recipient,prepareTransaction]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -82,9 +94,9 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
                         <Button
                             className="w-full bg-primary hover:bg-white/90 text-primary-foreground font-semibold h-11"
                             onClick={handleSend}
-                            disabled={!recipient || !amount || isLoading}
+                            disabled={!recipient || !amount || status !== "ready" || isLoading}
                         >
-                            {isLoading ? "Broadcasting..." : "Send Tokens"}
+                            {status === "preparing" ? "Syncing..." : "Send QCash"}
                         </Button>
                     </div>
                 </div>

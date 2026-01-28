@@ -207,5 +207,5 @@ export const useSolana = () => {
 
   };
 
-  return { registerVault, getVaultState, getSolBalance };
+  return { connection, registerVault, getVaultState, getSolBalance };
 };
