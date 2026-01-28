@@ -1,60 +1,30 @@
 import { useState, useEffect } from 'react';
 
-export interface WalletKeys {
-  seedPhrase: string;
-  publicAddress: string; // Ed25519 (Solana)
-  vaultKey: string;      // Kyber-768 (Quantum)
-  kyberSecretKey: number[];
+export interface WalletData {
+  seed: number[]; // 32 bytes
+  kyberPublicKey: number[]; // 1184 bytes
+  kyberSecretKey: number[]; // 2400 bytes
+  vaultPda: string;  // needed for return destination
 }
 
 export function useKeyManager() {
-  const [keys, setKeys] = useState<WalletKeys | null>(null);
-  const [isGenerated, setIsGenerated] = useState(false);
+  const [keys, setKeys] = useState<WalletData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock checking for existing keys in local storage
   useEffect(() => {
-    const storedKeys = localStorage.getItem('qcash_keys');
-    if (storedKeys) {
-      setKeys(JSON.parse(storedKeys));
-      setIsGenerated(true);
+    // Only run in extension environment
+    if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(["qcash_wallet"], (result) => {
+        if (result.qcash_wallet) {
+          console.log("Wallet loaded from storage");
+          setKeys(result.qcash_wallet as WalletData);
+        }
+        setIsLoading(false);
+      });
+    } else {
+      setIsLoading(false);
     }
   }, []);
 
-  const generateKeys = () => {
-    // Mock Seed Phrase (BIP-39 style)
-    const mockMnemonic = "quantum drift cipher galaxy orbit plasma nebula vector matrix shield fusion echo";
-
-    // Mock Solana Address
-    const mockSolAddress = "Gui8...7fV";
-
-    // Mock Quantum Vault Key (Kyber-768 hex)
-    const mockVaultKey = "0xAB42...91F";
-
-    const newKeys: WalletKeys = {
-      seedPhrase: mockMnemonic,
-      publicAddress: mockSolAddress,
-      vaultKey: mockVaultKey,
-      kyberSecretKey: [0xAB42, 0x91F],
-    };
-
-    // Simulate "processing" delay
-    setTimeout(() => {
-      setKeys(newKeys);
-      localStorage.setItem('qcash_keys', JSON.stringify(newKeys));
-      setIsGenerated(true);
-    }, 1000);
-  };
-
-  const clearKeys = () => {
-    localStorage.removeItem('qcash_keys');
-    setKeys(null);
-    setIsGenerated(false);
-  };
-
-  return {
-    keys,
-    isGenerated,
-    generateKeys,
-    clearKeys,
-  };
+  return { keys, isLoading };
 }

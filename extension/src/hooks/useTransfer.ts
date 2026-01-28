@@ -27,7 +27,7 @@ export const useTransfer = () => {
     const { utxos, syncNow: scanLedger } = useLedgerSync();
     const { keys } = useKeyManager();
 
-    const [status, setStatus] = useState<"idle" | "preparing" | "proving" | "encrypting" | "submitting" | "error">("idle");
+    const [status, setStatus] = useState<"idle" | "preparing" | "proving" | "encrypting" | "ready" | "submitting" | "success" | "error">("idle");
     const [receiverKey, setReceiverKey] = useState<Uint8Array | null>(null);
 
     // This functions runs 2 task in parallel
@@ -55,7 +55,7 @@ export const useTransfer = () => {
                 return new Uint8Array(account.kyberPubkey);
             })();
 
-            const [synced, kyberPubkey] = await Promise.all([syncPromise, keyPromise]);
+            const [_synced, kyberPubkey] = await Promise.all([syncPromise, keyPromise]);
 
             if (!kyberPubkey) {
                 throw new Error("Receiver key not found");
@@ -101,56 +101,70 @@ export const useTransfer = () => {
         if (!receiverKey || !keys?.kyberSecretKey) {
             throw new Error("Receiver key or secret key not found");
         }
-        setStatus("proving");
+        try {
 
-        const { inputs, totalAmount } = selectInputs();
+            const { inputs, totalAmount } = selectInputs();
 
-        if (totalAmount < amountToSend) {
-            throw new Error(`Insufficient Funds. Have ${totalAmount}, need ${amountToSend}`);
+            if (totalAmount < amountToSend) {
+                throw new Error(`Insufficient Funds. Have ${totalAmount}, need ${amountToSend}`);
+            }
+
+            const returnAmount = totalAmount - amountToSend;
+
+            // Encrypting Payload (WASM)
+            setStatus('encrypting');
+
+            // 1) Receiver Output 
+            const encapReceiver = wasm.encapsulate(receiverKey);
+            const payloadReceiver = wasm.encrypt_payload(
+                encapReceiver.shared_secret,
+                new PublicKey(receiverVault).toBuffer(),
+                BigInt(amountToSend),
+                false,
+            );
+
+            // 2) Return Output (To Self)
+            const myPubkeyBytes = keys.kyberSecretKey;
+            const encapReturn = wasm.encapsulate(new Uint8Array(myPubkeyBytes));
+            const payloadReturn = wasm.encrypt_payload(
+                encapReturn.shared_secret,
+                new PublicKey(keys.vaultPda).toBuffer(),
+                BigInt(returnAmount),
+                true,
+            );
+
+            setStatus("proving");
+            console.log("Generating ZK Proof");
+
+            // Proof inputs 
+            const proofInputs = {
+                // Have to provide the secret key 
+                sender_private_key_fragment: Array.from(keys.seed),
+                input_utxos: inputs.map(u => ({
+                    // TODO: Need to store the full OnChain Data (header) in useLeaderSync
+                    amount: u.amount,
+                    randomness: u.randomness,
+                })),
+                amount_to_send: amountToSend,
+                receiver_pubkey: Array.from(receiverKey),
+                receiver_randomness: Array.from(payloadReceiver.randomness),
+                return_randomness: Array.from(payloadReturn.randomness),
+                // Todo: Fetch tip hash
+                current_ledger_tip: new Array(32).fill(0),
+            };
+
+            // TODO: Call Prover 
+
+
+            // send the proof on chain
+            setStatus("submitting");
+
+            setStatus("success");
+
+        } catch (e) {
+            console.error(e);
+            setStatus("error");
         }
-
-        const returnAmount = totalAmount - amountToSend;
-
-        // Proof inputs 
-        const proofInputs = {
-            // Have to provide the secret key 
-            sender_private_key_fragment: Array.from(keys.seedPhrase),
-            input_utxos: inputs.map(u => ({
-
-            })),
-            amount_to_send: amountToSend,
-            receiver_pubkey: Array.from(receiverKey),
-        };
-
-        // Client Side Proving
-        // Need to be implemented here
-        console.log("Generating ZK Proof");
-
-        // Encrypting Payload (WASM)
-        setStatus('encrypting');
-
-        // 1) Receiver Output 
-        const encapReceiver = wasm.encapsulate(receiverKey);
-        const payloadReceiver = wasm.encrypt_payload(
-            encapReceiver.shared_secret,
-            new PublicKey(receiverVault).toBuffer(),
-            BigInt(amountToSend),
-            false,
-        );
-
-        // 2) Return Output (To Self)
-        const myPubkeyBytes = keys.kyberSecretKey;
-        const encapReturn = wasm.encapsulate(new Uint8Array(myPubkeyBytes));
-        const payloadReturn = wasm.encrypt_payload(
-            encapReturn.shared_secret,
-            new PublicKey("My VAULT PDA").toBuffer(),
-            BigInt(returnAmount),
-            true,
-        )
-
-        setStatus("submitting");
-
-        // send the proof on chain
 
     }
 

@@ -20,6 +20,10 @@ pub struct UTXOCommitmentHeader{
     pub prev_utxo_hash: HASH,
     pub ciphertext_commitment: HASH,
     pub epoch: u32,
+    #[serde(with = "serde_arrays")]
+    pub kyber_ciphertext: [u8; KYBER_CIPHERTEXT_SIZE],
+    pub nonce: [u8;12],
+    pub encrypted_payload: Vec<u8>,
 }
 
  #[derive(Clone,Debug,Serialize,Deserialize,PartialEq)]
@@ -35,24 +39,29 @@ pub struct UTXOEncryptedPayload{
 
 #[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct QSPVGuestInput{
-    // This is 32-byte seed, not the full secret key blob
+    // This is 32-byte seed, not the full secret key to save space
+    // The guest will regenerate the key from seed
     pub sender_private_key_fragment:[u8;32],
+    // The list of all the notes we are spending
     pub input_utxos:Vec<DecryptedInput>,
     // We use serde_arrays because default serde struggles with array > 32 bytes
     #[serde(with = "serde_arrays")]
     pub receiver_pubkey:KyberPubKey,
     pub amount_to_send:u64,
+    // The randomness used by WASM to encrypt the new outputs.
+    // The guest uses this to verify the encyrption matches.
     pub receiver_randomness:[u8;32],
     pub return_randomness:[u8;32],
     pub current_ledger_tip:HASH,
 }
 
+// The ZK Proof needs to see both the Encrypted header(from the chain) and the decrypted payload to prove that they match, without this the guest can't verify you actually own the notes.
 #[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct DecryptedInput{
+    // The public ledger data 
     pub header:UTXOCommitmentHeader,
+    // The Private Decrypted data
     pub payload:UTXOEncryptedPayload,
-    pub amount:u64,
-    pub randomness:[u8;32],
 }
 
 // Prover Output
