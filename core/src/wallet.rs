@@ -1,4 +1,4 @@
-use bip39::{Mnemonic, rand};
+use bip39::{Mnemonic};
 use ed25519_dalek::SigningKey;
 use ed25519_dalek_bip32::{ChildIndex, ExtendedSigningKey};
 use hmac::{Hmac, Mac};

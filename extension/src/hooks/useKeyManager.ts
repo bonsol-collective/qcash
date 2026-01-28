@@ -4,6 +4,7 @@ export interface WalletKeys {
   seedPhrase: string;
   publicAddress: string; // Ed25519 (Solana)
   vaultKey: string;      // Kyber-768 (Quantum)
+  kyberSecretKey: number[];
 }
 
 export function useKeyManager() {
@@ -22,17 +23,18 @@ export function useKeyManager() {
   const generateKeys = () => {
     // Mock Seed Phrase (BIP-39 style)
     const mockMnemonic = "quantum drift cipher galaxy orbit plasma nebula vector matrix shield fusion echo";
-    
+
     // Mock Solana Address
-    const mockSolAddress = "Gui8...7fV"; 
-    
+    const mockSolAddress = "Gui8...7fV";
+
     // Mock Quantum Vault Key (Kyber-768 hex)
     const mockVaultKey = "0xAB42...91F";
 
     const newKeys: WalletKeys = {
       seedPhrase: mockMnemonic,
       publicAddress: mockSolAddress,
-      vaultKey: mockVaultKey
+      vaultKey: mockVaultKey,
+      kyberSecretKey: [0xAB42, 0x91F],
     };
 
     // Simulate "processing" delay
@@ -53,6 +55,6 @@ export function useKeyManager() {
     keys,
     isGenerated,
     generateKeys,
-    clearKeys
+    clearKeys,
   };
 }

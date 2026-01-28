@@ -51,10 +51,17 @@ pub struct EncryptedPayloadResult{
     pub encrypted_payload:Vec<u8>,
     #[wasm_bindgen(getter_with_clone)]
     pub nonce:Vec<u8>,
+    #[wasm_bindgen(getter_with_clone)]
+    pub randomness:Vec<u8>,
 }
 
 #[wasm_bindgen]
-pub fn encrypt_payload(shared_secret:&[u8],receiver_vault_bytes:&[u8],amount:u64)->Result<EncryptedPayloadResult,String>{
+pub fn encrypt_payload(
+    shared_secret:&[u8],
+    receiver_vault_bytes:&[u8],
+    amount:u64,
+    is_return:bool, // true for change 
+)->Result<EncryptedPayloadResult,String>{
     if shared_secret.len() != 32 {
         return Err("Invalid Shared Secret Size".to_string());
     }
@@ -72,7 +79,7 @@ pub fn encrypt_payload(shared_secret:&[u8],receiver_vault_bytes:&[u8],amount:u64
 
     let utxo_payload = UTXOEncryptedPayload {
         amount,
-        is_return: false,
+        is_return,
         receiver_vault: receiver_array,
         randomness: payload_randomness,
         utxo_spent_list: vec![],
@@ -88,7 +95,6 @@ pub fn encrypt_payload(shared_secret:&[u8],receiver_vault_bytes:&[u8],amount:u64
     let mut nonce_bytes = [0u8; 12];
     rng.try_fill_bytes(&mut  nonce_bytes).expect("Error filling bytes");
 
-
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let encrypted_payload = cipher.encrypt(nonce, payload_bytes.as_ref())
@@ -96,7 +102,8 @@ pub fn encrypt_payload(shared_secret:&[u8],receiver_vault_bytes:&[u8],amount:u64
 
     Ok(EncryptedPayloadResult {
         encrypted_payload,
-        nonce: nonce_bytes.to_vec()
+        nonce: nonce_bytes.to_vec(),
+        randomness:payload_randomness.to_vec(),
     })
 }
 

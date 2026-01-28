@@ -54,7 +54,8 @@ app.post("/airdrop", async (req, res) => {
         const payloadResult = wasm.encrypt_payload(
             sharedSecret,
             new Uint8Array(vaultPubKey.toBuffer()),
-            amount
+            amount,
+            false,
         );
 
         const encryptedPayload = Uint8Array.from(payloadResult.encrypted_payload);

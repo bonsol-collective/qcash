@@ -35,10 +35,11 @@ pub struct UTXOEncryptedPayload{
 
 #[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct QSPVGuestInput{
+    // This is 32-byte seed, not the full secret key blob
     pub sender_private_key_fragment:[u8;32],
     pub input_utxos:Vec<DecryptedInput>,
+    // We use serde_arrays because default serde struggles with array > 32 bytes
     #[serde(with = "serde_arrays")]
-    // [u8;32]
     pub receiver_pubkey:KyberPubKey,
     pub amount_to_send:u64,
     pub receiver_randomness:[u8;32],
@@ -50,6 +51,8 @@ pub struct QSPVGuestInput{
 pub struct DecryptedInput{
     pub header:UTXOCommitmentHeader,
     pub payload:UTXOEncryptedPayload,
+    pub amount:u64,
+    pub randomness:[u8;32],
 }
 
 // Prover Output
