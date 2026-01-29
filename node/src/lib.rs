@@ -163,6 +163,8 @@ impl QcashNode {
     }
 }
 
+//create a start method that will start the events_subscription thread. AI!
+
 async fn events_subscription(
     websocket_url: String,
     tx_chan: mpsc::UnboundedSender<Vec<u8>>,
