@@ -172,6 +172,8 @@ impl QcashNode {
     }
 }
 
+//add another method/thread that will get the events from events_subscription, parse them and process them (use stubs for now), and call it from start. AI!
+
 async fn events_subscription(
     websocket_url: String,
     tx_chan: mpsc::UnboundedSender<Vec<u8>>,
