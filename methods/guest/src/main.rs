@@ -8,11 +8,20 @@ risc0_zkvm::guest::entry!(main);
 fn main(){
     let inputs:QSPVGuestInput  = env::read();
 
-    // 1) Recover Keys from seed
+    // Recover Keys from seed
     // This proves that "I know the private key corresponding to this seed"
     let my_keys = derive_kyber_key(&inputs.sender_private_key_fragment);
-    // Hash the Kyber pubkey (1184 bytes) to get a 32-byte vault identifier
+    // Hash the Kyber pubkey (1184 bytes) 
     let my_vault_hash = hash_pubkey(&my_keys.public);
+
+    // TODO: currently we are hardcoding the ZK logic to a specific deployment on solana, If we ever change solana program ID, all old proof would become invalid.
+    // deriving solana pda
+    let my_vault_pda = derive_solana_pda(
+        &inputs.solana_program_id,
+        b"vault",
+        &my_vault_hash,
+        inputs.vault_bump
+    );
 
     let mut total_in_amount:u64 = 0;
 
@@ -29,8 +38,8 @@ fn main(){
         }
 
         // Verify Ownership
-        if utxo.payload.receiver_vault != my_vault_hash {
-            panic!("Ownership Error: I cannot spend this UTXO. It belongs to someone else.");
+        if utxo.payload.receiver_vault != my_vault_pda {
+           panic!("Ownership Error: This UTXO belongs to address {:?}, but I derived {:?}", utxo.payload.receiver_vault, my_vault_pda);
         }
 
         // Spend list propogation
@@ -66,7 +75,8 @@ fn main(){
     let receiver_payload = UTXOEncryptedPayload{
         amount : inputs.amount_to_send,
         is_return:false,
-        receiver_vault: hash_pubkey(&inputs.receiver_pubkey),
+        // Todo: It is being calculated by the frontend.
+        receiver_vault: inputs.receiver_vault,
         randomness: inputs.receiver_randomness,
         utxo_spent_list: propagated_history.clone(),
         version: 1,
@@ -116,6 +126,15 @@ fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
     hasher.update(payload.receiver_vault);
     hasher.update(payload.randomness);
     for h in &payload.utxo_spent_list { hasher.update(h); }
+    hasher.finalize().into()
+}
+
+fn derive_solana_pda(program_id:&[u8;32],seed:&[u8],key_hash:&[u8;32],bump:u8) -> [u8;32]{
+    let mut hasher = Sha256::<Impl>::new();
+    hasher.update(program_id);
+    hasher.update(seed);
+    hasher.update(key_hash);
+    hasher.update(&[bump]);
     hasher.finalize().into()
 }
 

@@ -5,6 +5,8 @@ import { useCallback, useState } from "react";
 import { useKeyManager } from "./useKeyManager.ts";
 import * as wasm from '../wasm/qcash_wasm';
 
+const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
+
 export const useTransfer = () => {
     const { connection, getProgram } = useSolana();
     const { utxos, syncNow: scanLedger } = useLedgerSync();
@@ -109,12 +111,18 @@ export const useTransfer = () => {
     }
 
     const executeSend = async (amountToSend: number, receiverVault: string) => {
+
+
         if (!receiverKey || !keys?.kyberSecretKey) {
             throw new Error("Receiver key or secret key not found");
         }
         try {
 
-            const myVaultHash = await getKyberKeyHash(keys.kyberPublicKey);
+            const kyberKeyHash = await getKyberKeyHash(keys.kyberPublicKey);
+            const [_myVaultPda, myVaultBump] = PublicKey.findProgramAddressSync(
+                [Buffer.from("vault"), Buffer.from(kyberKeyHash)],
+                PROGRAM_ID
+            );
             const { inputs, totalAmount } = selectInputs();
 
             if (totalAmount < amountToSend) {
@@ -169,18 +177,25 @@ export const useTransfer = () => {
                     payload: {
                         amount: u.amount,
                         is_return: u.isReturn,
-                        receiver_vault: myVaultHash,
+                        receiver_vault: Array.from(new PublicKey(keys.vaultPda).toBuffer()),
                         randomness: u.randomness,
-                        utxo_spent_list: u.utxoSpentList,
+                        // Convert Uint8Array[] to number[][]
+                        // // JSON.stringify handles number[] correctly as [1,2,3], 
+                        // but handles Uint8Array as {"0":1, "1":2} which breaks Rust hash logic.
+                        utxo_spent_list: u.utxoSpentList.map(hash => Array.from(hash)),
                         version: 1
                     }
                 })),
+                solana_program_id: Array.from(PROGRAM_ID.toBuffer()),
+                vault_bump: myVaultBump,
                 amount_to_send: amountToSend,
                 receiver_pubkey: Array.from(receiverKey),
                 receiver_randomness: Array.from(receiverOutput.randomness),
                 return_randomness: Array.from(returnOutput.randomness),
                 current_ledger_tip: Array.from(currentTip),
             };
+
+            console.log("Proof Inputs:", proofInputs);
 
             // we need to pass the inputs to the Native Daemon via Native Messaging
             const nativeRequest = {

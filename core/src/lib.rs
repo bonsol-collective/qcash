@@ -54,6 +54,9 @@ pub struct QSPVGuestInput{
     pub return_randomness:[u8;32],
     // The latest hash on chain
     pub current_ledger_tip:HASH,
+    pub solana_program_id:[u8;32],
+    pub vault_bump:u8,
+    pub receiver_vault:[u8;32],
 }
 
 // The ZK Proof needs to see both the Encrypted header(from the chain) and the decrypted payload to prove that they match, without this the guest can't verify you actually own the notes.
