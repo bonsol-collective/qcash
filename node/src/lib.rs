@@ -137,8 +137,23 @@ pub struct QcashNodeConfig {
     pub current_key_file: String,
     pub next_key_file: Option<String>, //Default current-key + .next
 }
+
 pub struct QcashNode {
-    // implement new_from_config. AI!
+    key_manager: SolanaKeyManager,
+}
+
+impl QcashNode {
+    pub fn new_from_config(config: QcashNodeConfig) -> Result<Self> {
+        let current_key_file = config.current_key_file;
+        let next_key_file = match config.next_key_file {
+            Some(file) => file,
+            None => format!("{}.next", current_key_file),
+        };
+
+        let key_manager = SolanaKeyManager::new(current_key_file, next_key_file)?;
+
+        Ok(QcashNode { key_manager })
+    }
 }
 
 async fn events_subscription(
