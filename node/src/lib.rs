@@ -161,9 +161,16 @@ impl QcashNode {
             websocket_url: config.websocket_url,
         })
     }
-}
 
-//create a start method that will start the events_subscription thread. AI!
+    pub fn start(&self, tx_chan: mpsc::UnboundedSender<Vec<u8>>) {
+        let websocket_url = self.websocket_url.clone();
+        tokio::spawn(async move {
+            if let Err(e) = events_subscription(websocket_url, tx_chan).await {
+                eprintln!("Events subscription failed: {}", e);
+            }
+        });
+    }
+}
 
 async fn events_subscription(
     websocket_url: String,
