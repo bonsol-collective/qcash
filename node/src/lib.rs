@@ -23,6 +23,7 @@ pub struct SolanaKeyManager {
     previous_key: Keypair,
 }
 
+// make the previous key filename configurable, and pass it in the node constructor below. AI!
 impl SolanaKeyManager {
     /// Create a new SolanaKeyManager with the given key files
     pub fn new(current_key_file: String, next_key_file: String) -> Result<Self> {
