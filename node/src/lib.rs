@@ -23,13 +23,13 @@ pub struct SolanaKeyManager {
     previous_key: Keypair,
 }
 
-// make the previous key filename configurable, and pass it in the node constructor below. AI!
 impl SolanaKeyManager {
     /// Create a new SolanaKeyManager with the given key files
-    pub fn new(current_key_file: String, next_key_file: String) -> Result<Self> {
-        // Set up previous key file path
-        let previous_key_file = format!("{}.previous", current_key_file);
-
+    pub fn new(
+        current_key_file: String,
+        next_key_file: String,
+        previous_key_file: String,
+    ) -> Result<Self> {
         // Load or create previous key
         if !Path::new(&previous_key_file).exists() {
             info!("No previous key found, rotating keys...");
@@ -134,7 +134,7 @@ impl SolanaKeyManager {
 }
 
 pub struct QcashNodeConfig {
-    pub previous_key_file: Option<String>, //Default current-key + .previous
+    pub previous_key_file: String,
     pub current_key_file: String,
     pub next_key_file: Option<String>, //Default current-key + .next
 }
@@ -151,7 +151,11 @@ impl QcashNode {
             None => format!("{}.next", current_key_file),
         };
 
-        let key_manager = SolanaKeyManager::new(current_key_file, next_key_file)?;
+        let key_manager = SolanaKeyManager::new(
+            current_key_file,
+            next_key_file,
+            config.previous_key_file,
+        )?;
 
         Ok(QcashNode { key_manager })
     }
