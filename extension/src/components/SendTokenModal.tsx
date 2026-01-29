@@ -14,28 +14,35 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const {prepareTransaction, status} = useTransfer();
+    const { prepareTransaction, status, executeSend } = useTransfer();
 
     if (!isOpen) return null;
 
     const handleSend = async () => {
+        if (!amount || !recipient) return;
+
         setIsLoading(true);
-        // TODO: Implement send logic
-        setTimeout(() => {
-            setIsLoading(false);
+
+        try {
+            await executeSend(Number(amount), recipient);
             onClose();
-        }, 2000);
+        } catch (err) {
+            // TODO: Show Toast
+            console.error("Send failed:", err);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    useEffect(()=>{
-        if(recipient.length >= 32){
-            const timer = setTimeout(()=>{
+    useEffect(() => {
+        if (recipient.length >= 32) {
+            const timer = setTimeout(() => {
                 prepareTransaction(recipient);
-            },500)
+            }, 500)
 
-            return ()=> clearTimeout(timer);
+            return () => clearTimeout(timer);
         }
-    },[recipient,prepareTransaction]);
+    }, [recipient, prepareTransaction]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -94,7 +101,7 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
                         <Button
                             className="w-full bg-primary hover:bg-white/90 text-primary-foreground font-semibold h-11"
                             onClick={handleSend}
-                            disabled={!recipient || !amount || status !== "ready" || isLoading}
+                            disabled={!recipient || !amount || (status !== "ready" && !isLoading && status !== "idle") || isLoading}
                         >
                             {status === "preparing" ? "Syncing..." : "Send QCash"}
                         </Button>

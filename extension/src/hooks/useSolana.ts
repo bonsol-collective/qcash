@@ -25,10 +25,11 @@ export class InsufficientFundsError extends Error {
   }
 }
 
+const connection = new Connection(NETWORK, "confirmed");
+
 export const useSolana = () => {
   const wallet = useWallet();
   const { getSolanaSecret, isReady: wasmReady } = useWasm();
-  const connection = new Connection(NETWORK, "confirmed");
 
   const getProvider = async (): Promise<AnchorProvider> => {
     const provider = new AnchorProvider(connection, {} as any, {

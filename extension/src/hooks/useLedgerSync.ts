@@ -84,6 +84,8 @@ export const useLedgerSync = () => {
         }
 
         setIsSyncing(true);
+        console.log("Starting Sync...");
+
         try {
             const connection = new Connection(RPC_URL, "confirmed");
             const provider = new anchor.AnchorProvider(connection, {} as any, {});
@@ -98,12 +100,17 @@ export const useLedgerSync = () => {
             const ledgerAccount: any = await program.account.ledger.fetch(ledgerPda);
             const allOnChainUtxos = ledgerAccount.utxos;
 
+            console.log(`Scanned ${allOnChainUtxos.length} UTXOs from chain.`);
+
             const myUtxos: DecryptedUtxo[] = [];
             const secretKeyBytes = new Uint8Array(keys.kyberSecretKey);
 
             // Decryption Loop
             for (let i = 0; i < allOnChainUtxos.length; i++) {
                 const rawUtxo = allOnChainUtxos[i];
+                // Use global index if available, else loop index
+                const utxoIndex = rawUtxo.index !== undefined ? rawUtxo.index : i;
+
                 try {
                     const ciphertext = Uint8Array.from(rawUtxo.kyberCiphertext);
                     const nonce = Uint8Array.from(rawUtxo.nonce);
@@ -114,7 +121,7 @@ export const useLedgerSync = () => {
                         ciphertext,
                         nonce,
                         payload,
-                        i
+                        utxoIndex
                     );
 
                     const flatList = Array.from(decrypted.utxo_spent_list);
@@ -129,7 +136,7 @@ export const useLedgerSync = () => {
                         amount: Number(decrypted.amount),
                         isReturn: decrypted.is_return,
                         randomness: Array.from(decrypted.randomness),
-                        index: i,
+                        index: utxoIndex,
                         utxoSpentList: reconstructedList,
                         header: {
                             utxoHash: Array.from(rawUtxo.utxoHash),
@@ -141,22 +148,22 @@ export const useLedgerSync = () => {
                         }
                     });
 
-                    const timestamp = Date.now();
-                    await chrome.storage.local.set({
-                        synced_utxos: myUtxos,
-                        last_sync_time: timestamp
-                    });
-
-                    updateState(myUtxos);
-                    setLastSync(timestamp);
-
-                    console.log(`Sync Complete. Found ${myUtxos.length} UTXOs.`);
                 }
                 catch (e) {
                     // Decryption failed = Not our UTXO. Ignore.
                 }
             }
 
+            console.log(`Sync Complete. Found ${myUtxos.length} UTXOs for me.`);
+
+            const timestamp = Date.now();
+            await chrome.storage.local.set({
+                synced_utxos: myUtxos,
+                last_sync_time: timestamp
+            });
+
+            updateState(myUtxos);
+            setLastSync(timestamp);
 
         } catch (error) {
             console.error("Sync Failed:", error);

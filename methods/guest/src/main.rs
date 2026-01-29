@@ -18,7 +18,7 @@ fn main(){
 
     let mut propagated_history:Vec<HASH> = Vec::new();
 
-    for (i,utxo) in inputs.input_utxos.into_iter().enumerate(){
+    for utxo in &inputs.input_utxos{
 
         // Integrity Check (commitment == Hash(payload))
         // This proves: "The data I am showing matches the encrypted data "

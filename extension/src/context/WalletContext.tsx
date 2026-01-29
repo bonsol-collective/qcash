@@ -1,24 +1,24 @@
 import React, { useContext, useEffect, useState, type ReactNode } from "react";
 
-export interface WalletData{
+export interface StoredWallet{
     mnemonic: string;
     solana_address: string;
-    kyber_pubkey: string;
+    kyber_pubkey: string; // base58
     kyber_secret_key: number[];  // For background sync
     secret_entropy_hex: string;
 }
 
 interface WalletContextType{
-    wallet:WalletData | null;
+    wallet:StoredWallet | null;
     isLoading:boolean;
-    setWallet: (wallet: WalletData | null)=>void;
+    setWallet: (wallet: StoredWallet | null)=>void;
     clearWallet: ()=>void;
 }
 
 const WalletContext = React.createContext<WalletContextType|null>(null);
 
 export const WalletProvider = ({children}:{children:ReactNode})=>{
-    const [wallet,setWalletState] = useState<WalletData|null>(null);
+    const [wallet,setWalletState] = useState<StoredWallet|null>(null);
     const [isLoading,setIsLoading] = useState(true);
 
     // load from Chrome Storage on App Start
@@ -28,7 +28,7 @@ export const WalletProvider = ({children}:{children:ReactNode})=>{
             chrome.storage.local.get(["qcash_wallet"],(result)=>{
                 if(result.qcash_wallet){
                     console.log("Wallet loaded from storage");
-                    const loadedWallet = result.qcash_wallet as WalletData;
+                    const loadedWallet = result.qcash_wallet as StoredWallet;
                     setWalletState(loadedWallet);
 
                     // Ensure kyber_secret_key is stored for background sync
@@ -48,7 +48,7 @@ export const WalletProvider = ({children}:{children:ReactNode})=>{
         }
     },[])
 
-    const setWallet = (newWallet:WalletData | null)=>{
+    const setWallet = (newWallet:StoredWallet | null)=>{
         setWalletState(newWallet);
         if(newWallet){
             // save

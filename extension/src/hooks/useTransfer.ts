@@ -5,8 +5,6 @@ import { useCallback, useState } from "react";
 import { useKeyManager } from "./useKeyManager.ts";
 import * as wasm from '../wasm/qcash_wasm';
 
-const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
-
 export const useTransfer = () => {
     const { connection, getProgram } = useSolana();
     const { utxos, syncNow: scanLedger } = useLedgerSync();
@@ -57,7 +55,7 @@ export const useTransfer = () => {
     }, [connection, scanLedger]);
 
     // spend everthing from last change
-    const selectInputs = () => {
+    const selectInputs = useCallback(() => {
         // Descending order 
         const sorted = [...utxos].sort((a, b) => b.index - a.index);
 
@@ -79,7 +77,7 @@ export const useTransfer = () => {
             inputs: selectedInputs.reverse(),
             totalAmount: totalAvailable,
         }
-    }
+    }, [utxos]);
 
     const fetchLedgerState = async () => {
         const program = await getProgram();
@@ -117,6 +115,8 @@ export const useTransfer = () => {
             }
 
             const returnAmount = totalAmount - amountToSend;
+
+            console.log(`Selected ${inputs.length} UTXOs. Total: ${totalAmount}`);
 
             const { tip: currentTip, epoch: currentEpoch } = await fetchLedgerState();
 
@@ -197,8 +197,10 @@ export const useTransfer = () => {
                     if (response.status === "success") {
                         const { proof, proving_time_secs } = response.data;
                         console.log(`Proof generated in ${proving_time_secs}s`);
+                        console.log("Proof generated", proof);
 
-                        submitToSolana(proof, receiverOutput, returnOutput);
+                        setStatus("success");
+                        // submitToSolana(proof, receiverOutput, returnOutput);
                         res(response.data);
                     } else {
                         setStatus("error");
@@ -208,7 +210,6 @@ export const useTransfer = () => {
                 })
             })
 
-            setStatus("success");
 
         } catch (e) {
             console.error(e);
@@ -217,57 +218,57 @@ export const useTransfer = () => {
 
     }
 
-    const submitToSolana = async (proof: string, receiverOutput: any, returnOutput: any) => {
-        setStatus("submitting");
+    // const submitToSolana = async (proof: string, receiverOutput: any, returnOutput: any) => {
+    //     setStatus("submitting");
 
-        try {
-            const program = await getProgram();
+    //     try {
+    //         const program = await getProgram();
 
-            // convert base64 Proof to Buffer
-            const proofBytes = Buffer.from(proof, "base64");
+    //         // convert base64 Proof to Buffer
+    //         const proofBytes = Buffer.from(proof, "base64");
 
-            const [ledgerPda] = PublicKey.findProgramAddressSync(
-                [new TextEncoder().encode("ledger")],
-                program.programId
-            );
+    //         const [ledgerPda] = PublicKey.findProgramAddressSync(
+    //             [new TextEncoder().encode("ledger")],
+    //             program.programId
+    //         );
 
-            // formatting them for Anchor.
-            const receiverUTXO = {
-                utxoHash: Array.from(receiverOutput.utxo_hash),
-                prevUtxoHash: Array.from(receiverOutput.prev_utxo_hash),
-                ciphertextCommitment: Array.from(receiverOutput.commitment),
-                epoch: receiverOutput.epoch,
-                kyberCiphertext: Array.from(receiverOutput.kyber_ciphertext),
-                nonce: Array.from(receiverOutput.nonce),
-                encryptedPayload: Array.from(receiverOutput.encrypted_payload)
-            };
+    //         // formatting them for Anchor.
+    //         const receiverUTXO = {
+    //             utxoHash: Array.from(receiverOutput.utxo_hash),
+    //             prevUtxoHash: Array.from(receiverOutput.prev_utxo_hash),
+    //             ciphertextCommitment: Array.from(receiverOutput.commitment),
+    //             epoch: receiverOutput.epoch,
+    //             kyberCiphertext: Array.from(receiverOutput.kyber_ciphertext),
+    //             nonce: Array.from(receiverOutput.nonce),
+    //             encryptedPayload: Array.from(receiverOutput.encrypted_payload)
+    //         };
 
-            const returnUTXO = {
-                utxoHash: Array.from(returnOutput.utxo_hash),
-                prevUtxoHash: Array.from(returnOutput.prev_utxo_hash),
-                ciphertextCommitment: Array.from(returnOutput.commitment),
-                epoch: returnOutput.epoch,
-                kyberCiphertext: Array.from(returnOutput.kyber_ciphertext),
-                nonce: Array.from(returnOutput.nonce),
-                encryptedPayload: Array.from(returnOutput.encrypted_payload)
-            };
+    //         const returnUTXO = {
+    //             utxoHash: Array.from(returnOutput.utxo_hash),
+    //             prevUtxoHash: Array.from(returnOutput.prev_utxo_hash),
+    //             ciphertextCommitment: Array.from(returnOutput.commitment),
+    //             epoch: returnOutput.epoch,
+    //             kyberCiphertext: Array.from(returnOutput.kyber_ciphertext),
+    //             nonce: Array.from(returnOutput.nonce),
+    //             encryptedPayload: Array.from(returnOutput.encrypted_payload)
+    //         };
 
-            console.log("Submitting transaction to Solana...");
+    //         console.log("Submitting transaction to Solana...");
 
-            setStatus("success");
+    //         setStatus("success");
 
-            scanLedger();
+    //         scanLedger();
 
-        } catch (err) {
-            console.error("Submission failed:", err);
-            setStatus("error");
-            throw err;
-        }
+    //     } catch (err) {
+    //         console.error("Submission failed:", err);
+    //         setStatus("error");
+    //         throw err;
+    //     }
 
-        setStatus("success");
-    };
+    //     setStatus("success");
+    // };
 
 
-    return { prepareTransaction, status, receiverKey, utxos }
+    return { prepareTransaction, status, receiverKey, utxos, executeSend }
 
 }
