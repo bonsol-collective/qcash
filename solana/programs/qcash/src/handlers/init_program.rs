@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
+use crate::events::ProgramInitialized;
 use crate::state::{ProgramConfig, ProverRegistry};
 
 #[derive(Accounts)]
@@ -47,13 +48,14 @@ pub fn init_program(ctx: Context<InitProgram>) -> Result<()> {
     // Initialize empty prover registry
     prover_registry.initialize(registry_bump);
 
-    msg!(
-        "Program initialized | Admin: {} | Min attestations: {} | Config bump: {} | Registry bump: {}",
-        ctx.accounts.admin.key(),
-        MIN_ATTESTATIONS_REQUIRED,
+    // Emit event
+    emit!(ProgramInitialized {
+        admin: ctx.accounts.admin.key(),
+        min_attestations: MIN_ATTESTATIONS_REQUIRED,
         config_bump,
-        registry_bump
-    );
+        registry_bump,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }

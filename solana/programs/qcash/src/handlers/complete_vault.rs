@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_sha256_hasher::hash;
 use crate::{Vault, error::ErrorCode};
+use crate::events::VaultCompleted;
 
 #[derive(Accounts)]
 pub struct CompleteVault<'info>{
@@ -27,11 +28,12 @@ pub fn complete_vault(ctx:Context<CompleteVault>,kyber_key_part2:Vec<u8>) -> Res
 
     require_keys_eq!(vault_key, derived_pda, ErrorCode::HashMismatch);
 
-    msg!(
-        "Vault completed | Full Kyber public key stored | Total size: {} | Hash: {:?}",
-        vault.kyber_pubkey.len(),
-        hash_result.to_bytes()
-    );
+    emit!(VaultCompleted {
+        vault: vault_key,
+        total_length: vault.kyber_pubkey.len() as u32,
+        key_hash: hash_result.to_bytes(),
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }

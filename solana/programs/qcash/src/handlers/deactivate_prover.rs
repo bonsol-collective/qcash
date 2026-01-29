@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use solana_sha256_hasher::hash;
 use crate::constants::*;
 use crate::error::ErrorCode;
+use crate::events::ProverDeactivated;
 use crate::state::{ProgramConfig, ProverRegistry};
 
 #[derive(Accounts)]
@@ -40,11 +41,13 @@ pub fn deactivate_prover(ctx: Context<DeactivateProver>) -> Result<()> {
     // Deactivate the prover
     prover_registry.deactivate_prover(&prover_pubkey_hash)?;
 
-    msg!(
-        "Prover deactivated | Pubkey: {} | Hash: {:?}",
+    // Emit event
+    emit!(ProverDeactivated {
+        admin: ctx.accounts.admin.key(),
         prover_pubkey,
-        prover_pubkey_hash
-    );
+        prover_pubkey_hash,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }

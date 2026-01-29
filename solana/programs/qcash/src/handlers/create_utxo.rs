@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use solana_sha256_hasher::hash;
 use crate::constants::*;
 use crate::error::ErrorCode;
+use crate::events::UtxoCreated;
 use crate::state::{Utxo, Ledger, Loader};
 
 #[derive(Accounts)]
@@ -52,6 +53,7 @@ pub fn create_utxo(
 ) -> Result<()> {
     let ledger = &ctx.accounts.ledger;
     let loader = &ctx.accounts.loader;
+    let utxo_key = ctx.accounts.utxo.key();
     let utxo = &mut ctx.accounts.utxo;
     let bump = ctx.bumps.utxo;
 
@@ -88,16 +90,18 @@ pub fn create_utxo(
         bump,
     );
 
-    msg!(
-        "UTXO created | Hash: {:?} | Prev hash: {:?} | Epoch: {} | Payload size: {} | ZK proof: {} | Ciphertext commitment: {:?} | Bump: {}",
+    // Emit event
+    emit!(UtxoCreated {
+        utxo: utxo_key,
         utxo_hash,
         prev_utxo_hash,
         epoch,
-        utxo.encrypted_payload.len(),
-        ctx.accounts.zk_proof.key(),
+        payload_size: utxo.encrypted_payload.len() as u32,
+        zk_proof: ctx.accounts.zk_proof.key(),
         ciphertext_commitment,
-        bump
-    );
+        bump,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }

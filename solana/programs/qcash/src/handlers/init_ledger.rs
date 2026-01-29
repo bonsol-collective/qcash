@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
+use crate::events::LedgerInitialized;
 use crate::state::Ledger;
 
 #[derive(Accounts)]
@@ -25,12 +26,13 @@ pub fn init_ledger(ctx: Context<InitLedger>) -> Result<()> {
 
     ledger.initialize(bump);
 
-    msg!(
-        "Ledger initialized | Count: {} | Genesis hash: {:?} | Bump: {}",
-        ledger.count,
-        ledger.last_valid_utxo_hash,
-        bump
-    );
+    // Emit event
+    emit!(LedgerInitialized {
+        count: ledger.count,
+        genesis_hash: ledger.last_valid_utxo_hash,
+        bump,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }

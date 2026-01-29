@@ -3,6 +3,7 @@ use anchor_lang::system_program;
 use solana_sha256_hasher::hash;
 use crate::constants::*;
 use crate::error::ErrorCode;
+use crate::events::AttestationSubmitted;
 use crate::state::{Utxo, Ledger, ProverRegistry};
 
 #[derive(Accounts)]
@@ -53,6 +54,7 @@ pub fn submit_attestation(
     next_key_hash: [u8; 32],
 ) -> Result<()> {
     let ledger = &mut ctx.accounts.ledger;
+    let utxo_key = ctx.accounts.utxo.key();
     let utxo = &mut ctx.accounts.utxo;
     let prover_registry = &mut ctx.accounts.prover_registry;
     let prover_old_pubkey = ctx.accounts.prover_old.key();
@@ -62,12 +64,6 @@ pub fn submit_attestation(
     require!(
         utxo.prev_utxo_hash == ledger.get_tip_hash(),
         ErrorCode::UtxoHashMismatch
-    );
-
-    msg!(
-        "Attestation validation | UTXO prev hash: {:?} | Ledger tip: {:?}",
-        utxo.prev_utxo_hash,
-        ledger.get_tip_hash()
     );
 
     // Hash OLD prover's public key for verification
@@ -84,26 +80,8 @@ pub fn submit_attestation(
     // Record vote on UTXO
     utxo.record_vote(prover_unique_id, vote)?;
 
-    msg!(
-        "Vote recorded | Prover ID: {} | Old pubkey: {} | Old hash: {:?} | New pubkey: {} | Vote: {} | Valid votes: {} | Invalid votes: {} | Total votes: {}",
-        prover_unique_id,
-        prover_old_pubkey,
-        prover_old_pubkey_hash,
-        prover_new_pubkey,
-        vote,
-        utxo.get_valid_votes(),
-        utxo.get_invalid_votes(),
-        utxo.get_total_votes()
-    );
-
     // Update prover's key hash to the next_key_hash for rotation
     prover_info.update_pubkey_hash(next_key_hash);
-
-    msg!(
-        "Prover key rotated | Prover ID: {} | New hash: {:?}",
-        prover_unique_id,
-        next_key_hash
-    );
 
     // Transfer all lamports from old prover account to new prover account
     let old_lamports = ctx.accounts.prover_old.lamports();
@@ -117,32 +95,37 @@ pub fn submit_attestation(
             transfer_ix
         );
         system_program::transfer(cpi_ctx, old_lamports)?;
-
-        msg!(
-            "Funds transferred | From: {} | To: {} | Amount: {} lamports",
-            prover_old_pubkey,
-            prover_new_pubkey,
-            old_lamports
-        );
     }
 
     // Check if minimum attestations threshold is met
-    if utxo.threshold_met(MIN_ATTESTATIONS_REQUIRED) {
+    let threshold_met = utxo.threshold_met(MIN_ATTESTATIONS_REQUIRED);
+    let (new_ledger_tip, new_ledger_count) = if threshold_met {
         // Update ledger with new valid UTXO
         ledger.update_tip(utxo.utxo_hash);
-
-        msg!(
-            "UTXO validated | Threshold met | New tip hash: {:?} | Ledger count: {}",
-            utxo.utxo_hash,
-            ledger.count
-        );
+        (Some(utxo.utxo_hash), Some(ledger.count))
     } else {
-        msg!(
-            "UTXO pending | Attestations: {}/{} required",
-            utxo.get_valid_votes(),
-            MIN_ATTESTATIONS_REQUIRED
-        );
-    }
+        (None, None)
+    };
+
+    // Emit event
+    emit!(AttestationSubmitted {
+        utxo: utxo_key,
+        utxo_hash: utxo.utxo_hash,
+        prover_old: prover_old_pubkey,
+        prover_old_hash: prover_old_pubkey_hash,
+        prover_new: prover_new_pubkey,
+        prover_unique_id,
+        vote,
+        next_key_hash,
+        lamports_transferred: old_lamports,
+        valid_votes: utxo.get_valid_votes(),
+        invalid_votes: utxo.get_invalid_votes(),
+        total_votes: utxo.get_total_votes(),
+        threshold_met,
+        new_ledger_tip,
+        new_ledger_count,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }

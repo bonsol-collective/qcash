@@ -2,10 +2,12 @@ pub mod constants;
 pub mod error;
 pub mod handlers;
 pub mod state;
+pub mod events;
 
 use anchor_lang::prelude::*;
 
 pub use constants::*;
+pub use events::*;
 pub use handlers::*;
 pub use state::*;
 

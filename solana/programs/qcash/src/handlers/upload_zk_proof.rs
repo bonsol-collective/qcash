@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::{ZkProof, error::ErrorCode};
+use crate::events::{ZkProofInitialized, ZkProofChunkWritten};
 
 #[derive(Accounts)]
 #[instruction(total_bytes: u32)]
@@ -31,7 +32,12 @@ pub fn init_zk_proof(ctx: Context<InitZkProof>, total_bytes: u32) -> Result<()> 
     
     ZkProof::initialize(&mut data, total_bytes);
     
-    msg!("ZK Proof Account Initialized: {} bytes", total_bytes);
+    emit!(ZkProofInitialized {
+        zk_proof: zk_proof.key(),
+        total_bytes,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+
     Ok(())
 }
 
@@ -70,13 +76,14 @@ pub fn write_zk_proof(ctx: Context<WriteZkProof>, offset: u32, chunk: Vec<u8>) -
         .ok_or(ErrorCode::ArithmeticOverflow)?;
     ZkProof::update_bytes_written(&mut data, new_bytes_written);
     
-    msg!(
-        "Wrote chunk: {} bytes at offset {} ({}/{})",
-        chunk.len(),
+    emit!(ZkProofChunkWritten {
+        zk_proof: zk_proof.key(),
+        chunk_size: chunk.len() as u32,
         offset,
         new_bytes_written,
-        total_len
-    );
+        total_length: total_len,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
     
     Ok(())
 }

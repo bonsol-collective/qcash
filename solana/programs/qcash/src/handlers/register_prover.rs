@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use solana_sha256_hasher::hash;
 use crate::constants::*;
 use crate::error::ErrorCode;
+use crate::events::ProverRegistered;
 use crate::state::{ProgramConfig, ProverRegistry};
 
 #[derive(Accounts)]
@@ -43,13 +44,15 @@ pub fn register_prover(
     // Register the prover
     prover_registry.register_prover(unique_id, prover_pubkey_hash)?;
 
-    msg!(
-        "Prover registered | Unique ID: {} | Pubkey: {} | Hash: {:?} | Total provers: {}",
+    // Emit event
+    emit!(ProverRegistered {
+        admin: ctx.accounts.admin.key(),
         unique_id,
         prover_pubkey,
         prover_pubkey_hash,
-        prover_registry.prover_count
-    );
+        total_provers: prover_registry.prover_count,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }
