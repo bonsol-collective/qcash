@@ -99,27 +99,31 @@ export const useTransfer = () => {
 
             const returnAmount = totalAmount - amountToSend;
 
+            // TODO: fetch the current ledger tip 
+            const currentTip = new Uint8Array(32).fill(0);
+            const currentEpoch = 0;
+
             // Encrypting Payload (WASM)
             setStatus('encrypting');
 
-            // 1) Receiver Output 
-            const encapReceiver = wasm.encapsulate(receiverKey);
-            const payloadReceiver = wasm.encrypt_payload(
-                encapReceiver.shared_secret,
-                new PublicKey(receiverVault).toBuffer(),
+            const receiverOutput = await wasm.prepare_output(
+                receiverKey, // raw Uint8Array bytes
                 BigInt(amountToSend),
-                false,
+                currentTip,
+                currentEpoch,
+                false
             );
 
-            // 2) Return Output (To Self)
-            const myPubkeyBytes = keys.kyberSecretKey;
-            const encapReturn = wasm.encapsulate(new Uint8Array(myPubkeyBytes));
-            const payloadReturn = wasm.encrypt_payload(
-                encapReturn.shared_secret,
-                new PublicKey(keys.vaultPda).toBuffer(),
+            // This hash will links to the receiver UTXO
+            const prevHash = new Uint8Array(receiverOutput.utxo_hash);
+
+            const returnOutput = await wasm.prepare_output(
+                keys.kyberPublicKey,
                 BigInt(returnAmount),
-                true,
-            );
+                prevHash,
+                currentEpoch,
+                true
+            )
 
             setStatus("proving");
             console.log("Generating ZK Proof");
@@ -149,10 +153,9 @@ export const useTransfer = () => {
                 })),
                 amount_to_send: amountToSend,
                 receiver_pubkey: Array.from(receiverKey),
-                receiver_randomness: Array.from(payloadReceiver.randomness),
-                return_randomness: Array.from(payloadReturn.randomness),
-                // Todo: Fetch tip hash
-                current_ledger_tip: new Array(32).fill(0),
+                receiver_randomness: Array.from(receiverOutput  .randomness),
+                return_randomness: Array.from(returnOutput.randomness),
+                current_ledger_tip: Array.from(currentTip),
             };
 
             // we need to pass the inputs to the Native Daemon via Native Messaging
@@ -178,7 +181,7 @@ export const useTransfer = () => {
                         const { proof, proving_time_secs } = response.data;
                         console.log(`Proof generated in ${proving_time_secs}s`);
 
-                        submitToSolana(proof, payloadReceiver, payloadReturn);
+                        submitToSolana(proof, receiverOutput, returnOutput);
                         res(response.data);
                     } else {
                         setStatus("error");

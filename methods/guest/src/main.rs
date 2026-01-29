@@ -18,7 +18,7 @@ fn main(){
 
     let mut propagated_history:Vec<HASH> = Vec::new();
 
-    for (i,utxo) in &inputs.input_utxos.enumerate(){
+    for (i,utxo) in inputs.input_utxos.into_iter().enumerate(){
 
         // Integrity Check (commitment == Hash(payload))
         // This proves: "The data I am showing matches the encrypted data "
@@ -110,7 +110,7 @@ fn hash_pubkey(pubkey: &[u8; 1184]) -> [u8; 32] {
 }
 
 fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
-    let mut hasher = Sha256::new();
+    let mut hasher = Sha256::<Impl>::new();
     hasher.update(payload.amount.to_le_bytes());
     hasher.update(&[payload.is_return as u8]);
     hasher.update(payload.receiver_vault);
@@ -121,7 +121,7 @@ fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
 
 fn create_header(payload: &UTXOEncryptedPayload, prev_hash: HASH, epoch: u32) -> UTXOCommitmentHeader {
    let c_commitment = hash_payload(payload);
-    let mut hasher = Sha256::new();
+    let mut hasher = Sha256::<Impl>::new();
     hasher.update(c_commitment);
     hasher.update(prev_hash);
     hasher.update(epoch.to_le_bytes());
