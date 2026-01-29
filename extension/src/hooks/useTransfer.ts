@@ -161,6 +161,7 @@ export const useTransfer = () => {
                 payload: {
                     receiver: receiverVault,
                     amount: amountToSend,
+                    proof_inputs: proofInputs,
                 }
             }
 
@@ -198,10 +199,53 @@ export const useTransfer = () => {
 
     const submitToSolana = async (proof: string, receiverOutput: any, returnOutput: any) => {
         setStatus("submitting");
-        // TODO - Task to do:
-        // 1. Convert Base64 proof back to bytes
-        // 2. Build Transaction calling qcash_program.transfer
-        // 3. Include the UTXOCommitmentHeaders for both outputs
+
+        try {
+            // TODO: Need to fix this also, add that it in a Hook
+            const provider = new anchor.AnchorProvider(connection, {} as any);
+            const program = new anchor.Program<SolanaPrograms>(idl as SolanaPrograms, provider);
+
+            // convert base64 Proof to Buffer
+            const proofBytes = Buffer.from(proof, "base64");
+
+            const [ledgerPda] = PublicKey.findProgramAddressSync(
+                [new TextEncoder().encode("ledger")],
+                program.programId
+            );
+
+            // formatting them for Anchor.
+            const receiverUTXO = {
+                utxoHash: Array.from(receiverOutput.utxo_hash),
+                prevUtxoHash: Array.from(receiverOutput.prev_utxo_hash),
+                ciphertextCommitment: Array.from(receiverOutput.commitment),
+                epoch: receiverOutput.epoch,
+                kyberCiphertext: Array.from(receiverOutput.kyber_ciphertext),
+                nonce: Array.from(receiverOutput.nonce),
+                encryptedPayload: Array.from(receiverOutput.encrypted_payload)
+            };
+
+            const returnUTXO = {
+                utxoHash: Array.from(returnOutput.utxo_hash),
+                prevUtxoHash: Array.from(returnOutput.prev_utxo_hash),
+                ciphertextCommitment: Array.from(returnOutput.commitment),
+                epoch: returnOutput.epoch,
+                kyberCiphertext: Array.from(returnOutput.kyber_ciphertext),
+                nonce: Array.from(returnOutput.nonce),
+                encryptedPayload: Array.from(returnOutput.encrypted_payload)
+            };
+
+            console.log("Submitting transaction to Solana...");
+
+            setStatus("success");
+
+            scanLedger();
+
+        } catch (err) {
+            console.error("Submission failed:", err);
+            setStatus("error");
+            throw err;
+        }
+
         setStatus("success");
     };
 
