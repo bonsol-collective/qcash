@@ -68,7 +68,7 @@ fn handle(req: Request) -> Response {
             }
         },
         Request::Send { receiver: _, amount, proof_inputs } => {
-            println!("[DAEMON] Received Send Request. Amount: {}", amount);
+            eprintln!("[DAEMON] Received Send Request. Amount: {}", amount);
 
             // Validation: Ensure the Extension actually sent inputs
             if proof_inputs.input_utxos.is_empty() {
@@ -78,7 +78,7 @@ fn handle(req: Request) -> Response {
                 };
             }
 
-            println!("[DAEMON] Starting proof generation...");
+            eprintln!("[DAEMON] Starting proof generation...");
             let start_time = Instant::now();
 
             // Run the RISC Zero Prover
@@ -94,7 +94,7 @@ fn handle(req: Request) -> Response {
             });
 
             let elapsed = start_time.elapsed();
-            println!("[DAEMON] Proof generated in {:.2}s", elapsed.as_secs_f64());
+            eprintln!("[DAEMON] Proof generated in {:.2}s", elapsed.as_secs_f64());
 
             match prove_result {
                 Ok(Ok(info)) => {

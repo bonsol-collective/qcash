@@ -210,8 +210,10 @@ export const useTransfer = () => {
                         // submitToSolana(proof, receiverOutput, returnOutput);
                         res(response.data);
                     } else {
+                        const errorMsg = response.data?.msg || response.msg || "Unknown daemon error";
+                        console.error("Daemon Error:", errorMsg);
                         setStatus("error");
-                        rej(response.data.msg);
+                        rej(errorMsg);
                     }
 
                 })

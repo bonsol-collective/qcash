@@ -4,6 +4,6 @@ members = [
     "core",
     "daemon",
     "methods",
-    "methods/guest", "qcash-faucet/backend",
+    "methods/guest",
     "wasm"
 ]
