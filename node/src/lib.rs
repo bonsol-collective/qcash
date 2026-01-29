@@ -139,6 +139,7 @@ pub struct QcashNodeConfig {
     pub next_key_file: Option<String>, //Default current-key + .next
 }
 
+// add the websocket_url config param. AI!
 pub struct QcashNode {
     key_manager: SolanaKeyManager,
 }
@@ -151,11 +152,8 @@ impl QcashNode {
             None => format!("{}.next", current_key_file),
         };
 
-        let key_manager = SolanaKeyManager::new(
-            current_key_file,
-            next_key_file,
-            config.previous_key_file,
-        )?;
+        let key_manager =
+            SolanaKeyManager::new(current_key_file, next_key_file, config.previous_key_file)?;
 
         Ok(QcashNode { key_manager })
     }
