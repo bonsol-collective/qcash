@@ -54,6 +54,12 @@ export const useTransfer = () => {
 
     }, [connection, scanLedger]);
 
+    async function getKyberKeyHash(kyberKey: number[] | Uint8Array): Promise<number[]> {
+        const keyBytes = new Uint8Array(kyberKey);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', keyBytes);
+        return Array.from(new Uint8Array(hashBuffer));
+    }
+
     // spend everthing from last change
     const selectInputs = useCallback(() => {
         // Descending order 
@@ -108,6 +114,7 @@ export const useTransfer = () => {
         }
         try {
 
+            const myVaultHash = await getKyberKeyHash(keys.kyberPublicKey);
             const { inputs, totalAmount } = selectInputs();
 
             if (totalAmount < amountToSend) {
@@ -162,7 +169,7 @@ export const useTransfer = () => {
                     payload: {
                         amount: u.amount,
                         is_return: u.isReturn,
-                        receiver_vault: Array.from(new PublicKey(keys.vaultPda).toBuffer()), // Todo: CHECK IT
+                        receiver_vault: myVaultHash,
                         randomness: u.randomness,
                         utxo_spent_list: u.utxoSpentList,
                         version: 1
