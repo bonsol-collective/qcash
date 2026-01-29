@@ -3,7 +3,10 @@ resolver = "3"
 members = [
     "core",
     "daemon",
+    "interface",
     "methods",
     "methods/guest",
-    "wasm"
+    "node",
+    "qcash-faucet/backend",
+    "wasm",
 ]

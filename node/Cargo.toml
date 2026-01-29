@@ -1,0 +1,23 @@
+[package]
+name = "node"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+base64 = "0.22.1"
+futures = "0.3.31"
+risc0-zkvm = "3.0.4"
+solana-client = "3.1.8"
+solana-pubsub-client = "3.1.8"
+tokio = { version = "1.49.0", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = [
+    "json",
+    "time",
+    "env-filter",
+] }
+
+interface = { path = "../interface" }
+solana-sdk = "3.0.0"
+sha3 = "0.10.8"
