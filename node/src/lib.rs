@@ -164,15 +164,29 @@ impl QcashNode {
 
     pub fn start(&self, tx_chan: mpsc::UnboundedSender<Vec<u8>>) {
         let websocket_url = self.websocket_url.clone();
+        let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+
+        // Spawn the events subscription thread
         tokio::spawn(async move {
-            if let Err(e) = events_subscription(websocket_url, tx_chan).await {
+            if let Err(e) = events_subscription(websocket_url, tx).await {
                 eprintln!("Events subscription failed: {}", e);
             }
         });
+
+        // Spawn the event processing thread
+        tokio::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                Self::process_event(event).await;
+            }
+        });
+    }
+
+    async fn process_event(event: Vec<u8>) {
+        // Stub: Parse and process the event
+        info!("Processing event: {:?}", event);
+        // TODO: Implement actual parsing and processing logic
     }
 }
-
-//add another method/thread that will get the events from events_subscription, parse them and process them (use stubs for now), and call it from start. AI!
 
 async fn events_subscription(
     websocket_url: String,
