@@ -1,4 +1,4 @@
-import { Send, X } from 'lucide-react';
+import { Send, X, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -14,9 +14,8 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const { prepareTransaction, status, executeSend } = useTransfer();
 
-    if (!isOpen) return null;
+    const { prepareTransaction, executeSend, status } = useTransfer();
 
     const handleSend = async () => {
         if (!amount || !recipient) return;
@@ -35,14 +34,25 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
     };
 
     useEffect(() => {
-        if (recipient.length >= 32) {
+        if (isOpen && recipient.length >= 32) {
             const timer = setTimeout(() => {
                 prepareTransaction(recipient);
             }, 500)
 
             return () => clearTimeout(timer);
         }
-    }, [recipient, prepareTransaction]);
+    }, [recipient, prepareTransaction, isOpen]); 
+
+    if (!isOpen) return null;
+
+    const getButtonText = () => {
+        if (isLoading) return "Processing...";
+        if (status === "preparing") return "Syncing Ledger...";
+        if (status === "encrypting") return "Encrypting...";
+        if (status === "proving") return "Generating Proof...";
+        if (status === "submitting") return "Submitting...";
+        return "Send QCash";
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -52,6 +62,7 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
                     size="icon"
                     className="absolute right-4 top-4 h-6 w-6 rounded-full opacity-70 hover:opacity-100"
                     onClick={onClose}
+                    disabled={isLoading}
                 >
                     <X className="h-4 w-4" />
                 </Button>
@@ -69,12 +80,13 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
                 <div className="space-y-4">
                     <div className="space-y-2">
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Recipient Kyber Key
+                            Recipient Vault (PDA)
                         </label>
                         <Input
-                            placeholder="Paste Recipient's Public Key"
+                            placeholder="Paste Recipient's Vault Address"
                             value={recipient}
                             onChange={(e) => setRecipient(e.target.value)}
+                            disabled={isLoading}
                             className="font-mono text-sm bg-secondary/20 border-border focus-visible:ring-offset-0 focus-visible:ring-1 focus-visible:ring-white"
                         />
                     </div>
@@ -89,6 +101,7 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
                                 placeholder="0.00"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
+                                disabled={isLoading}
                                 className="bg-secondary/20 border-border focus-visible:ring-offset-0 focus-visible:ring-1 focus-visible:ring-white pr-16"
                             />
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground pointer-events-none">
@@ -103,7 +116,8 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
                             onClick={handleSend}
                             disabled={!recipient || !amount || (status !== "ready" && !isLoading && status !== "idle") || isLoading}
                         >
-                            {status === "preparing" ? "Syncing..." : "Send QCash"}
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {getButtonText()}
                         </Button>
                     </div>
                 </div>
