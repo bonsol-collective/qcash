@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
-use solana_program::hash::hash;
-
-use crate::{Vault,error::ErrorCode};
+use solana_sha256_hasher::hash;
+use crate::{Vault, error::ErrorCode};
+use crate::events::VaultCompleted;
 
 #[derive(Accounts)]
 pub struct CompleteVault<'info>{
@@ -18,16 +18,22 @@ pub fn complete_vault(ctx:Context<CompleteVault>,kyber_key_part2:Vec<u8>) -> Res
     require!(vault.kyber_pubkey.len() == 1184, ErrorCode::InvalidKeyLength);
 
     // hash verification
-    let hash = hash(&vault.kyber_pubkey);
+    let hash_result = hash(&vault.kyber_pubkey);
+    let vault_key = vault.key();
 
     let (derived_pda,_bump) = Pubkey::find_program_address(
-        &[b"vault",hash.as_ref()],
+        &[b"vault",hash_result.as_ref()],
         ctx.program_id,
     );
 
-    require_keys_eq!(ctx.accounts.vault.key(),derived_pda,ErrorCode::HashMismatch);
+    require_keys_eq!(vault_key, derived_pda, ErrorCode::HashMismatch);
 
-    msg!("Vault completed successfully, full Kyber public key stored");
+    emit!(VaultCompleted {
+        vault: vault_key,
+        total_length: vault.kyber_pubkey.len() as u32,
+        key_hash: hash_result.to_bytes(),
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }

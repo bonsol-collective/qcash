@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
-
-use crate::{KYBER_CIPHERTEXT_SIZE, Loader, error::ErrorCode};
+use crate::{Loader, error::ErrorCode};
+use crate::events::{LoaderInitialized, LoaderChunkWritten};
 
 #[derive(Accounts)]
 pub struct InitLoader<'info>{
-
     #[account(mut)]
     pub signer:Signer<'info>,
 
@@ -19,7 +18,12 @@ pub struct InitLoader<'info>{
 }
 
 pub fn init_loader(ctx:Context<InitLoader>)->Result<()>{
-    msg!("Loader Account Initialized");
+    emit!(LoaderInitialized {
+        loader: ctx.accounts.loader.key(),
+        size: Loader::LEN as u32,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+
     Ok(())
 }
 
@@ -36,11 +40,17 @@ pub fn write_loader(ctx:Context<WriteLoader>,offset:u32,data:Vec<u8>)->Result<()
     let start = offset as usize;
     let end = start + data.len();
     
-    require!(end <= KYBER_CIPHERTEXT_SIZE,ErrorCode::PayloadTooLarge);
+    require!(end <= Loader::LEN, ErrorCode::PayloadTooLarge);
 
     loader.ciphertext[start..end].copy_from_slice(&data);
 
-    msg!("Wrote chunks : {} bytes at offeset {}",data.len(),offset);
+    emit!(LoaderChunkWritten {
+        loader: ctx.accounts.loader.key(),
+        chunk_size: data.len() as u32,
+        offset,
+        end: end as u32,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     Ok(())
 }
