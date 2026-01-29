@@ -193,6 +193,7 @@ export const useTransfer = () => {
                 receiver_randomness: Array.from(receiverOutput.randomness),
                 return_randomness: Array.from(returnOutput.randomness),
                 current_ledger_tip: Array.from(currentTip),
+                receiver_vault: Array.from(new PublicKey(receiverVault).toBuffer()),
             };
 
             console.log("Proof Inputs:", proofInputs);

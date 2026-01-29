@@ -41,15 +41,19 @@ fn main() {
         }
 
         // Process Request
-        if let Ok(req) = serde_json::from_slice::<Request>(&buf) {
-            let resp = handle(req);
-            send_response(&resp);
-        } else {
-            let err_resp = Response {
-                status: "error".into(),
-                data: serde_json::json!("Invalid JSON format")
-            };
-            send_response(&err_resp);
+        match serde_json::from_slice::<Request>(&buf) {
+            Ok(req) => {
+                let resp = handle(req);
+                send_response(&resp);
+            }, 
+            Err(e) => {
+                eprintln!("[DAEMON] JSON Parse Error: {}", e);
+                let resp = Response {
+                    status: "error".into(),
+                    data: serde_json::json!(format!("Invalid JSON format: {}", e)),
+                };
+                send_response(&resp);
+            }
         }
     }
 }
