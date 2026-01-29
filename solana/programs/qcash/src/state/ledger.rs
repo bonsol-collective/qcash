@@ -1,36 +1,42 @@
 use anchor_lang::prelude::*;
 
-use crate::KYBER_CIPHERTEXT_SIZE;
-
-pub const MAX_PAYLOAD_SIZE:usize = 2048;
-pub const NONCE_SIZE:usize = 12; // ChaCha20 Nonce
-
+/// Ledger account that tracks the last valid UTXO hash
 #[account]
-pub struct Ledger{
+#[derive(Default)]
+pub struct Ledger {
+    /// Total number of valid UTXOs
     pub count: u64,
-    pub utxos:Vec<Utxo>,
+    
+    /// Hash of the last valid UTXO (genesis is all zeros)
+    pub last_valid_utxo_hash: [u8; 32],
+    
+    /// Bump seed for PDA
+    pub bump: u8,
 }
 
-impl Ledger{
-    // helper to get the tip for chaining validation
-    pub fn get_tip_hash(&self)->[u8;32]{
-        if let Some(last) = self.utxos.last(){
-            last.utxo_hash
-        }else{
-            // genesis hash
-            [0u8;32]
-        }
+impl Ledger {
+    /// Size of the Ledger account in bytes
+    pub const SIZE: usize = 8 + // discriminator
+        8 + // count
+        32 + // last_valid_utxo_hash
+        1 + // bump
+        64; // padding for future fields
+
+    /// Initialize the ledger with genesis state
+    pub fn initialize(&mut self, bump: u8) {
+        self.count = 0;
+        self.last_valid_utxo_hash = [0u8; 32]; // genesis hash
+        self.bump = bump;
     }
-}
 
-#[derive(AnchorDeserialize,AnchorSerialize,Clone,InitSpace)]
-pub struct Utxo{
-    pub epoch:u32,
-    pub utxo_hash: [u8;32],
-    pub prev_utxo_hash: [u8;32],
-    pub ciphertext_commitment: [u8;32], // SHA256(ciphertext+payload+nonce)
-    pub nonce: [u8;NONCE_SIZE],   // Required by ChaCha20 to decrypt safely, the lock's unique IV
-    #[max_len(MAX_PAYLOAD_SIZE)]
-    pub encrypted_payload:Vec<u8>,
-    pub kyber_ciphertext:[u8;KYBER_CIPHERTEXT_SIZE], // receiver uses this to decrypt the Shared secret
+    /// Get the tip hash for chain validation
+    pub fn get_tip_hash(&self) -> [u8; 32] {
+        self.last_valid_utxo_hash
+    }
+
+    /// Update the last valid UTXO hash and increment count
+    pub fn update_tip(&mut self, new_utxo_hash: [u8; 32]) {
+        self.last_valid_utxo_hash = new_utxo_hash;
+        self.count += 1;
+    }
 }

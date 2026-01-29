@@ -12,7 +12,7 @@ pub enum ErrorCode {
     HashMismatch,
     
     #[msg("Invalid previous UTXO hash provided")]
-    InvalidHashMismatch,
+    InvalidPreviousUtxoHash,
     
     #[msg("Payload too large")]
     PayloadTooLarge,
@@ -22,4 +22,49 @@ pub enum ErrorCode {
     
     #[msg("Invalid offset: must match current bytes_written")]
     InvalidOffset,
+
+    #[msg("Program config already initialized")]
+    ProgramConfigAlreadyInitialized,
+
+    #[msg("Admin authority not set")]
+    AdminAuthorityNotSet,
+
+    #[msg("Unauthorized: Only admin can perform this action")]
+    UnauthorizedAdmin,
+
+    #[msg("Prover already registered")]
+    ProverAlreadyRegistered,
+
+    #[msg("Prover not registered")]
+    ProverNotRegistered,
+
+    #[msg("Prover not active")]
+    ProverNotActive,
+
+    #[msg("Prover already voted on this UTXO")]
+    ProverAlreadyVoted,
+
+    #[msg("Maximum provers reached")]
+    MaxProversReached,
+
+    #[msg("Maximum votes reached for this UTXO")]
+    MaxVotesReached,
+
+    #[msg("Invalid stake amount")]
+    InvalidStakeAmount,
+
+    #[msg("Prover unique ID already used")]
+    ProverUniqueIdAlreadyUsed,
+
+    #[msg("Invalid prover unique ID. Cannot be zero.")]
+    InvalidProverUniqueId,
+
+    #[msg("ZK Proof account not provided")]
+    ZkProofAccountNotProvided,
+
+    #[msg("UTXO hash mismatch with ledger")]
+    UtxoHashMismatch,
+
+    #[msg("Min attestations not met")]
+    MinAttestationsNotMet,
 }
