@@ -155,11 +155,37 @@ export const useTransfer = () => {
                 current_ledger_tip: new Array(32).fill(0),
             };
 
-            // TODO: Call Prover 
+            // we need to pass the inputs to the Native Daemon via Native Messaging
+            const nativeRequest = {
+                action: "Send",
+                payload: {
+                    receiver: receiverVault,
+                    amount: amountToSend,
+                }
+            }
 
 
-            // send the proof on chain
-            setStatus("submitting");
+            return new Promise((res, rej) => {
+                chrome.runtime.sendNativeMessage('com.qcash.daemon', nativeRequest, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.error("Native Messaging Error:", chrome.runtime.lastError);
+                        setStatus("error");
+                        return rej(chrome.runtime.lastError);
+                    }
+
+                    if (response.status === "success") {
+                        const { proof, proving_time_secs } = response.data;
+                        console.log(`Proof generated in ${proving_time_secs}s`);
+
+                        submitToSolana(proof, payloadReceiver, payloadReturn);
+                        res(response.data);
+                    } else {
+                        setStatus("error");
+                        rej(response.data.msg);
+                    }
+
+                })
+            })
 
             setStatus("success");
 
@@ -169,6 +195,16 @@ export const useTransfer = () => {
         }
 
     }
+
+    const submitToSolana = async (proof: string, receiverOutput: any, returnOutput: any) => {
+        setStatus("submitting");
+        // TODO - Task to do:
+        // 1. Convert Base64 proof back to bytes
+        // 2. Build Transaction calling qcash_program.transfer
+        // 3. Include the UTXOCommitmentHeaders for both outputs
+        setStatus("success");
+    };
+
 
     return { prepareTransaction, status, receiverKey, utxos }
 
