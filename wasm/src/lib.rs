@@ -115,6 +115,9 @@ pub struct DecryptUtxo{
     pub randomness: Vec<u8>,
     pub is_return:bool,
     pub index:u32, // helps frontend track position
+    #[wasm_bindgen(getter_with_clone)]
+    pub utxo_spent_list: Vec<u8>, // Flattened array,
+    pub spent_list_len:usize, // to help reconstruct chunks of 32 bytes
 }
 
 #[wasm_bindgen]
@@ -151,11 +154,18 @@ pub fn try_decrypt_utxo(
     let payload:UTXOEncryptedPayload = bincode::deserialize(&decrypted_bytes)
         .map_err(|_| "Deserializtaion Failed".to_string())?;
 
+    let mut flat_spent_list = Vec::new();
+    for hash in &payload.utxo_spent_list{
+        flat_spent_list.extend_from_slice(hash);
+    }
+
     Ok(DecryptUtxo { 
         amount: payload.amount, 
         randomness: payload.randomness.to_vec(), 
         is_return:  payload.is_return,
         index,
+        utxo_spent_list: flat_spent_list,
+        spent_list_len: payload.utxo_spent_list.len(),
     })
 
 }

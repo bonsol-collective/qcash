@@ -1,17 +1,14 @@
-import * as anchor from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 import { useSolana } from "./useSolana";
 import { useLedgerSync } from "./useLedgerSync";
 import { useCallback, useState } from "react";
-import idl from "../idl/qcash_program.json";
-import type { SolanaPrograms } from "../idl/solana_programs.ts"
 import { useKeyManager } from "./useKeyManager.ts";
 import * as wasm from '../wasm/qcash_wasm';
 
 const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
 
 export const useTransfer = () => {
-    const { connection } = useSolana();
+    const { connection, getProgram } = useSolana();
     const { utxos, syncNow: scanLedger } = useLedgerSync();
     const { keys } = useKeyManager();
 
@@ -34,8 +31,7 @@ export const useTransfer = () => {
 
             // Get the kyber Pubkey Key
             const keyPromise = (async () => {
-                const provider = new anchor.AnchorProvider(connection, {} as any);
-                const program = new anchor.Program<SolanaPrograms>(idl as SolanaPrograms, provider);
+                const program = await getProgram();
                 const vaultPda = new PublicKey(receiverAddress);
 
                 const account = await program.account.vault.fetch(vaultPda);
@@ -85,6 +81,29 @@ export const useTransfer = () => {
         }
     }
 
+    const fetchLedgerState = async () => {
+        const program = await getProgram();
+        const [ledgerPda] = PublicKey.findProgramAddressSync(
+            [new TextEncoder().encode("ledger")],
+            program.programId
+        );
+        const ledgerAccount = await program.account.ledger.fetch(ledgerPda);
+
+        let tip: Uint8Array;
+
+        if (ledgerAccount.utxos.length === 0) {
+            tip = new Uint8Array(32).fill(0);
+        } else {
+            const last = ledgerAccount.utxos[ledgerAccount.utxos.length - 1];
+            tip = new Uint8Array(last.utxoHash);
+        }
+
+        return {
+            tip,
+            epoch: 0,
+        }
+    }
+
     const executeSend = async (amountToSend: number, receiverVault: string) => {
         if (!receiverKey || !keys?.kyberSecretKey) {
             throw new Error("Receiver key or secret key not found");
@@ -99,9 +118,7 @@ export const useTransfer = () => {
 
             const returnAmount = totalAmount - amountToSend;
 
-            // TODO: fetch the current ledger tip 
-            const currentTip = new Uint8Array(32).fill(0);
-            const currentEpoch = 0;
+            const { tip: currentTip, epoch: currentEpoch } = await fetchLedgerState();
 
             // Encrypting Payload (WASM)
             setStatus('encrypting');
@@ -118,7 +135,7 @@ export const useTransfer = () => {
             const prevHash = new Uint8Array(receiverOutput.utxo_hash);
 
             const returnOutput = await wasm.prepare_output(
-                keys.kyberPublicKey,
+                new Uint8Array(keys.kyberPublicKey),
                 BigInt(returnAmount),
                 prevHash,
                 currentEpoch,
@@ -140,20 +157,20 @@ export const useTransfer = () => {
                         epoch: u.header.epoch,
                         kyber_ciphertext: u.header.kyberCiphertext,
                         nonce: u.header.nonce,
-                        encrypted_payload: [] // TODO:Empty vec 
+                        encrypted_payload: [] // our guest code, never reads this field. it only checks the payload(plaintext) hashes to the ciphertextCommitment. so this is ignored we can skip this for now.
                     },
                     payload: {
                         amount: u.amount,
                         is_return: u.isReturn,
                         receiver_vault: Array.from(new PublicKey(keys.vaultPda).toBuffer()), // Todo: CHECK IT
                         randomness: u.randomness,
-                        utxo_spent_list: [], // TODO: Track history
+                        utxo_spent_list: u.utxoSpentList,
                         version: 1
                     }
                 })),
                 amount_to_send: amountToSend,
                 receiver_pubkey: Array.from(receiverKey),
-                receiver_randomness: Array.from(receiverOutput  .randomness),
+                receiver_randomness: Array.from(receiverOutput.randomness),
                 return_randomness: Array.from(returnOutput.randomness),
                 current_ledger_tip: Array.from(currentTip),
             };
@@ -204,9 +221,7 @@ export const useTransfer = () => {
         setStatus("submitting");
 
         try {
-            // TODO: Need to fix this also, add that it in a Hook
-            const provider = new anchor.AnchorProvider(connection, {} as any);
-            const program = new anchor.Program<SolanaPrograms>(idl as SolanaPrograms, provider);
+            const program = await getProgram();
 
             // convert base64 Proof to Buffer
             const proofBytes = Buffer.from(proof, "base64");

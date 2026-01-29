@@ -10,6 +10,7 @@ import { Buffer } from "buffer";
 import { useWallet } from "../context/WalletContext";
 import idl from "../idl/qcash_program.json";
 import { useWasm } from "./useWasm";
+import type { SolanaPrograms } from "../idl/solana_programs";
 
 const NETWORK = "http://127.0.0.1:8899";
 const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
@@ -29,16 +30,19 @@ export const useSolana = () => {
   const { getSolanaSecret, isReady: wasmReady } = useWasm();
   const connection = new Connection(NETWORK, "confirmed");
 
-  // const getProvider = ()=>{
-  //     const connection = new Connection(NETWORK, "confirmed");
-  //     // We only need to sign transaction
-  //     // In reality we should use the user sol key.
-  //     // For testing we are importing a dummy key.
-  //     const provider = new AnchorProvider(connection,(window as any).solana,{
-  //         preflightCommitment: "confirmed",
-  //     })
-  //     return provider;
-  // }
+  const getProvider = async (): Promise<AnchorProvider> => {
+    const provider = new AnchorProvider(connection, {} as any, {
+      preflightCommitment: "confirmed",
+    })
+
+    return provider;
+  }
+
+  const getProgram = async (): Promise<Program<SolanaPrograms>> => {
+    const provider = await getProvider();
+    const program = new Program<SolanaPrograms>(idl as SolanaPrograms, provider);
+    return program;
+  }
 
   const getSolBalance = async () => {
 
@@ -207,5 +211,5 @@ export const useSolana = () => {
 
   };
 
-  return { connection, registerVault, getVaultState, getSolBalance };
+  return { connection, registerVault, getVaultState, getSolBalance, getProgram };
 };

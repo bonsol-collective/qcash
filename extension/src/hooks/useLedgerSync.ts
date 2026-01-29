@@ -14,6 +14,7 @@ export type DecryptedUtxo = {
     amount: number,
     isReturn: boolean,
     randomness: number[],
+    utxoSpentList: number[][],
     // Public Data
     header: {
         utxoHash: number[],
@@ -116,11 +117,20 @@ export const useLedgerSync = () => {
                         i
                     );
 
+                    const flatList = Array.from(decrypted.utxo_spent_list);
+                    const reconstructedList: number[][] = [];
+                    for (let j = 0; j < decrypted.spent_list_len; j++) {
+                        const start = j * 32;
+                        const end = start + 32;
+                        reconstructedList.push(flatList.slice(start, end));
+                    }
+
                     myUtxos.push({
                         amount: Number(decrypted.amount),
                         isReturn: decrypted.is_return,
                         randomness: Array.from(decrypted.randomness),
                         index: i,
+                        utxoSpentList: reconstructedList,
                         header: {
                             utxoHash: Array.from(rawUtxo.utxoHash),
                             prevUtxoHash: Array.from(rawUtxo.prevUtxoHash),
