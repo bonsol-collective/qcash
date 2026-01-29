@@ -187,11 +187,18 @@ export const useTransfer = () => {
 
 
             return new Promise((res, rej) => {
-                chrome.runtime.sendNativeMessage('com.qcash.daemon', nativeRequest, (response) => {
+                chrome.runtime.sendMessage({ type: "SEND_TO_DAEMON", payload: nativeRequest }, (response) => {
                     if (chrome.runtime.lastError) {
-                        console.error("Native Messaging Error:", chrome.runtime.lastError);
+                        console.error("Messaging Error:", chrome.runtime.lastError);
                         setStatus("error");
                         return rej(chrome.runtime.lastError);
+                    }
+
+                    // Handle case where background script returns error explicitly
+                    if (!response || response.status === "error") {
+                        console.error("Daemon/Background Error:", response?.msg);
+                        setStatus("error");
+                        return rej(response?.msg || "Unknown error from daemon");
                     }
 
                     if (response.status === "success") {
@@ -214,6 +221,7 @@ export const useTransfer = () => {
         } catch (e) {
             console.error(e);
             setStatus("error");
+            throw e; // rethrow the error 
         }
 
     }

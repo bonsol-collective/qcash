@@ -7,8 +7,8 @@ import type { SolanaPrograms } from "./idl/solana_programs.ts";
 // @ts-ignore - Vite provides this at build time
 import wasmUrl from "./wasm/qcash_wasm_bg.wasm?url";
 
-// const PROGRAM_ID = new PublicKey(import.meta.env.VITE_PROGRAM_ID);
 const RPC_URL = import.meta.env.VITE_RPC_URL;
+const HASH_SIZE = 32;
 
 interface SyncedUtxo {
     index: number;
@@ -23,6 +23,7 @@ interface SyncedUtxo {
         kyberCiphertext: number[];
         nonce: number[];
     }
+    utxoSpentList: Uint8Array[];
 }
 
 let wasmInitialized = false;
@@ -44,6 +45,40 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === "START_SYNC") {
         syncLedger().then(() => sendResponse("Synced"))
+        return true; // keep the message channel for async response
+    }
+
+    // Handle Daemon Request
+    if (msg.type === "SEND_TO_DAEMON") {
+        console.log("Background: Connecting to Native Daemon...");
+
+        try {
+            const port = chrome.runtime.connectNative('com.qcash.daemon');
+
+            // forward the payload to the Rust daemon
+            port.postMessage(msg.payload);
+
+            // Listen for Daemon Process
+            port.onMessage.addListener((response) => {
+                console.log("Background: Received from Daemon:", response);
+                sendResponse(response);
+                port.disconnect();
+            })
+
+            port.onDisconnect.addListener(() => {
+                if (chrome.runtime.lastError) {
+                    console.error("Background: Connection Failed:", chrome.runtime.lastError.message);
+                    sendResponse({ status: "error", msg: chrome.runtime.lastError.message });
+                } else {
+                    console.log("Background: Daemon disconnected");
+                }
+            })
+        }
+        catch (e) {
+            console.error("Background: Native Messaging Error", e);
+            sendResponse({ status: "error", msg: (e as Error).message });
+        }
+
         return true; // keep the message channel for async response
     }
 })
@@ -118,11 +153,22 @@ async function syncLedger() {
 
                 console.log(`Found UTXO! Amount: ${decrypted.amount}`);
 
+                const flatSpentList = decrypted.utxo_spent_list; //Uint8Array
+                const count = decrypted.spent_list_len;
+                const reconstructedSpentList: Uint8Array[] = [];
+
+                for (let k = 0; k < count; k++) {
+                    const start = k * HASH_SIZE;
+                    const end = start + HASH_SIZE;
+                    reconstructedSpentList.push(flatSpentList.slice(start, end));
+                }
+
                 newDecryptedUtxos.push({
                     amount: Number(decrypted.amount),
                     is_return: decrypted.is_return,
                     randomness: Array.from(decrypted.randomness),
                     index: i,
+                    utxoSpentList: reconstructedSpentList,
                     header: {
                         utxoHash: Array.from(rawUtxo.utxoHash),
                         prevUtxoHash: Array.from(rawUtxo.prevUtxoHash),
