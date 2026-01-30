@@ -15,6 +15,7 @@ interface SyncedUtxo {
     amount: number;
     randomness: number[];
     is_return: boolean;
+    utxoHashHex: string;
     header: {
         utxoHash: number[];
         prevUtxoHash: number[];
@@ -116,12 +117,6 @@ async function syncLedger() {
         // preparing key for WASM
         const secretKey = new Uint8Array(storage.kyber_secret_key as number[]);
 
-        const existingUtxos = (storage.synced_utxos || []) as SyncedUtxo[];
-
-        // Find the highest index we have processed so far
-        const lastIndex = existingUtxos.length > 0 ?
-            existingUtxos[existingUtxos.length - 1].index : -1;
-
         // Fetch data on chain
         const connection = new Connection(RPC_URL, "confirmed");
         const dummyPubkey = Keypair.generate().publicKey;
@@ -130,28 +125,31 @@ async function syncLedger() {
 
         const program = new anchor.Program<SolanaPrograms>(idl, provider);
 
-        const [ledgerPda] = PublicKey.findProgramAddressSync(
-            [new TextEncoder().encode("ledger")],
-            program.programId
-        );
+        // TODO: Use Qfire (custom RPC) for production - getProgramAccounts can be slow
+        // Fetch all UTXO accounts 
+        console.log("Background: Fetching UTXO accounts via getProgramAccounts...");
 
-        // TODO: Use Qfire instead
-        const ledgerAccount = await program.account.ledger.fetch(ledgerPda);
-        const allOnChainUtxos = ledgerAccount.utxos;
+        // Fetch all UTXOs 
+        const utxoAccounts = await program.account.utxo.all();
+
+        console.log(`Background: Found ${utxoAccounts.length} UTXOs`);
+
         const newDecryptedUtxos: SyncedUtxo[] = [];
 
-        // looping through the utxos we haven't read till now 
-        for (let i = lastIndex + 1; i < allOnChainUtxos.length; i++) {
-            const rawUtxo = allOnChainUtxos[i];
+        // Process all UTXOs
+        for (let i = 0; i < utxoAccounts.length; i++) {
+            const accountInfo = utxoAccounts[i];
+            const rawUtxo = accountInfo.account;
+
             try {
-                // raw bytes fro WASM
+                // raw bytes for WASM
                 const ciphertext = Uint8Array.from(rawUtxo.kyberCiphertext);
                 const nonce = Uint8Array.from(rawUtxo.nonce);
                 const payload = Uint8Array.from(rawUtxo.encryptedPayload);
 
                 const decrypted = try_decrypt_utxo(secretKey, ciphertext, nonce, payload, i);
 
-                console.log(`Found UTXO! Amount: ${decrypted.amount}`);
+                console.log(`Background: Found UTXO! Amount: ${decrypted.amount}`);
 
                 const flatSpentList = decrypted.utxo_spent_list; //Uint8Array
                 const count = decrypted.spent_list_len;
@@ -168,6 +166,7 @@ async function syncLedger() {
                     is_return: decrypted.is_return,
                     randomness: Array.from(decrypted.randomness),
                     index: i,
+                    utxoHashHex: Buffer.from(rawUtxo.utxoHash).toString('hex'),
                     utxoSpentList: reconstructedSpentList,
                     header: {
                         utxoHash: Array.from(rawUtxo.utxoHash),
@@ -184,13 +183,12 @@ async function syncLedger() {
             }
         }
 
-        if (newDecryptedUtxos.length > 0) {
-            const updatedList = [...existingUtxos, ...newDecryptedUtxos];
-            await chrome.storage.local.set({
-                synced_utxos: updatedList,
-                last_sync_time: Date.now(),
-            })
-        }
+        await chrome.storage.local.set({
+            synced_utxos: newDecryptedUtxos,
+            last_sync_time: Date.now(),
+        });
+
+        console.log(`Background: Sync complete. Found ${newDecryptedUtxos.length} UTXOs for me.`);
 
     }
     catch (err) {

@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
-import { Connection, PublicKey } from '@solana/web3.js';
+import { Connection } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../idl/qcash_program.json'
 import type { SolanaPrograms } from '../idl/solana_programs.ts'
 import { useKeyManager } from "./useKeyManager";
 import * as wasm from "../wasm";
 
-const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
 const RPC_URL = "http://127.0.0.1:8899";
 
 export type DecryptedUtxo = {
@@ -24,6 +23,8 @@ export type DecryptedUtxo = {
         kyberCiphertext: number[],
         nonce: number[]
     }
+    // Using utxo_hash as unique identifier 
+    utxoHashHex: string,
     index: number,
 }
 
@@ -53,28 +54,6 @@ export const useLedgerSync = () => {
         });
     }, []);
 
-    // // load initial data & listener
-    // useEffect(() => {
-
-    //     chrome.storage.local.get(['synced_utxos', 'last_sync_time'], (result) => {
-    //         updateState(result.synced_utxos as DecryptedUtxo[], result.last_sync_time as number);
-    //     });
-
-    //     const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
-    //         if (changes.synced_utxos) {
-    //             console.log("UI received update from Background!");
-    //             // Todo: Pass Date correctly
-    //             updateState(changes.synced_utxos.newValue as DecryptedUtxo[], Date.now());
-    //             setIsSyncing(false);
-    //         }
-    //     }
-
-    //     chrome.storage.onChanged.addListener(listener);
-
-    //     return () => chrome.storage.onChanged.removeListener(listener);
-
-    // }, []);
-
     // manual trigger 
     const syncNow = useCallback(async () => {
 
@@ -91,25 +70,22 @@ export const useLedgerSync = () => {
             const provider = new anchor.AnchorProvider(connection, {} as any, {});
             const program = new anchor.Program<SolanaPrograms>(idl as SolanaPrograms, provider);
 
-            const [ledgerPda] = PublicKey.findProgramAddressSync(
-                [Buffer.from("ledger")],
-                PROGRAM_ID
-            );
+            // TODO: Use Qfire (custom RPC) for production - getProgramAccounts can be slow
+            // Fetch all UTXO accounts (now unified - airdrop UTXOs have votes=None)
+            console.log("Fetching UTXO accounts via getProgramAccounts...");
 
-            // TODO: Fetching whole account can be heavy
-            const ledgerAccount: any = await program.account.ledger.fetch(ledgerPda);
-            const allOnChainUtxos = ledgerAccount.utxos;
+            // Fetch all UTXOs (both regular and airdrop now use same account type)
+            const utxoAccounts = await program.account.utxo.all();
 
-            console.log(`Scanned ${allOnChainUtxos.length} UTXOs from chain.`);
+            console.log(`Found ${utxoAccounts.length} UTXOs`);
 
             const myUtxos: DecryptedUtxo[] = [];
             const secretKeyBytes = new Uint8Array(keys.kyberSecretKey);
 
-            // Decryption Loop
-            for (let i = 0; i < allOnChainUtxos.length; i++) {
-                const rawUtxo = allOnChainUtxos[i];
-                // Use global index if available, else loop index
-                const utxoIndex = rawUtxo.index !== undefined ? rawUtxo.index : i;
+            // Process all UTXOs
+            for (let i = 0; i < utxoAccounts.length; i++) {
+                const accountInfo = utxoAccounts[i];
+                const rawUtxo = accountInfo.account;
 
                 try {
                     const ciphertext = Uint8Array.from(rawUtxo.kyberCiphertext);
@@ -121,7 +97,7 @@ export const useLedgerSync = () => {
                         ciphertext,
                         nonce,
                         payload,
-                        utxoIndex
+                        i // Use index for ordering
                     );
 
                     const flatList = Array.from(decrypted.utxo_spent_list);
@@ -132,11 +108,14 @@ export const useLedgerSync = () => {
                         reconstructedList.push(flatList.slice(start, end));
                     }
 
+                    const utxoHashHex = Buffer.from(rawUtxo.utxoHash).toString('hex');
+
                     myUtxos.push({
                         amount: Number(decrypted.amount),
                         isReturn: decrypted.is_return,
                         randomness: Array.from(decrypted.randomness),
-                        index: utxoIndex,
+                        index: i,
+                        utxoHashHex,
                         utxoSpentList: reconstructedList,
                         header: {
                             utxoHash: Array.from(rawUtxo.utxoHash),

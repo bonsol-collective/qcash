@@ -1,12 +1,12 @@
 import express from "express";
 import cors from "cors";
 import * as anchor from "@coral-xyz/anchor";
-import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
-// import { Program, AnchorProvider, setProvider } from "@anchor-lang/core";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import idl from "./idl/solana_programs.json" with {type: "json"};
 import type { SolanaPrograms } from "./idl/solana_programs.ts";
 import * as wasm from "qcash-wasm";
 import dotenv from "dotenv";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -15,7 +15,6 @@ app.use(cors());
 app.use(express.json());
 
 const port = process.env.PORT || 3000;
-const programId = process.env.PROGRAM_ID!;
 const connection = new anchor.web3.Connection("http://127.0.0.1:8899", "confirmed");
 const faucetKeypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(process.env.FAUCET_KEY!)));
 const wallet = new anchor.Wallet(faucetKeypair);
@@ -49,6 +48,8 @@ app.post("/airdrop", async (req, res) => {
 
         console.log("Kyber Encapsulation Success via WASM");
 
+        const epoch = 0;
+
         // Construct & Encrypt Payload using WASM
         const amount = BigInt(100); // 100 tokens
         const payloadResult = wasm.encrypt_payload(
@@ -63,13 +64,19 @@ app.post("/airdrop", async (req, res) => {
 
         console.log("Payload Encrypted successfully", payloadResult.encrypted_payload);
 
-        // Execute Transaction
-        const loaderKeypair = Keypair.generate();
-        // const airdrop = await connection.requestAirdrop(loaderKeypair.publicKey, 1);
-        // console.log("Airdrop", airdrop);
-        const loaderSize = 8 + 1088; // Discriminator + Ciphertext size
+        // Calculate UTXO hash from the encrypted payload + nonce + epoch
+        // Using sha256 of concatenated data as utxo_hash
+        const hashInput = Buffer.concat([
+            Buffer.from(encryptedPayload),
+            Buffer.from(nonce),
+            Buffer.from(new Uint32Array([epoch]).buffer)
+        ]);
+        const utxoHash = crypto.createHash("sha256").update(hashInput).digest();
+        console.log("UTXO Hash:", utxoHash.toString("hex"));
 
-        // Ix 1 : Upload Ciphertext
+        // Step 1: Upload Ciphertext via Loader
+        const loaderKeypair = Keypair.generate();
+
         // - init Loader
         const initTx = await program.methods.initLoader()
             .accounts({
@@ -81,8 +88,7 @@ app.post("/airdrop", async (req, res) => {
 
         console.log("Loader Initialized", initTx);
 
-        // - Upload Chunks
-        // We split 1088 bytes into 2 chunks of 600 bytes 
+        // - Upload Chunks (split 1088 bytes into chunks)
         const totalSize = ciphertext.length;
         let offset = 0;
 
@@ -100,24 +106,42 @@ app.post("/airdrop", async (req, res) => {
             offset = end;
         }
 
-        // Ix 2 : Transfer
+        console.log("Ciphertext uploaded successfully");
+
+        // Step 2: Call Airdrop instruction (creates UTXO and immediately finalizes)
         const [ledgerPda] = PublicKey.findProgramAddressSync(
             [Buffer.from("ledger")],
             program.programId
         );
 
-        const transferTx = await program.methods.transfer(Buffer.from(encryptedPayload), Array.from(nonce))
+        // Derive the UTXO PDA (uses same 'utxo' seed as regular UTXOs)
+        const [utxoPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("utxo"), utxoHash],
+            program.programId
+        );
+
+        console.log("Ledger PDA:", ledgerPda.toString());
+        console.log("UTXO PDA:", utxoPda.toString());
+
+        const airdropTx = await program.methods.airdrop(
+            Array.from(utxoHash) as number[],
+            Buffer.from(encryptedPayload),
+            Array.from(nonce) as number[],
+            epoch
+        )
             .accounts({
                 loader: loaderKeypair.publicKey,
-                signer: faucetKeypair.publicKey,
             })
             .signers([faucetKeypair])
             .rpc();
 
+        console.log("Airdrop completed:", airdropTx);
+
         res.json({
             status: "success",
-            signature: transferTx,
-            loader: loaderKeypair.publicKey.toString()
+            signature: airdropTx,
+            utxoPda: utxoPda.toString(),
+            utxoHash: utxoHash.toString("hex"),
         });
 
     }

@@ -8,25 +8,31 @@
   },
   "instructions": [
     {
-      "name": "append_to_ledger",
+      "name": "airdrop",
+      "docs": [
+        "Airdrop tokens to a vault without proof verification"
+      ],
       "discriminator": [
-        18,
-        23,
-        229,
+        113,
+        173,
+        36,
         238,
-        97,
-        223,
-        54,
-        28
+        38,
+        152,
+        22,
+        117
       ],
       "accounts": [
         {
-          "name": "payer",
+          "name": "signer",
           "writable": true,
           "signer": true
         },
         {
           "name": "ledger",
+          "docs": [
+            "Ledger account - will be updated with new tip"
+          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -45,23 +51,76 @@
           }
         },
         {
+          "name": "utxo",
+          "docs": [
+            "New UTXO account to be created",
+            "Uses same UTXO_SEED as regular UTXOs - differentiated by optional voting fields"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  116,
+                  120,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "utxo_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "loader",
+          "docs": [
+            "Loader account containing Kyber ciphertext (will be closed after use)"
+          ],
+          "writable": true
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "utxo",
+          "name": "utxo_hash",
           "type": {
-            "defined": {
-              "name": "Utxo"
-            }
+            "array": [
+              "u8",
+              32
+            ]
           }
+        },
+        {
+          "name": "encrypted_payload",
+          "type": "bytes"
+        },
+        {
+          "name": "nonce",
+          "type": {
+            "array": [
+              "u8",
+              12
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "type": "u32"
         }
       ]
     },
     {
       "name": "complete_vault",
+      "docs": [
+        "Complete vault with second part of Kyber public key"
+      ],
       "discriminator": [
         13,
         122,
@@ -86,7 +145,211 @@
       ]
     },
     {
+      "name": "create_utxo",
+      "discriminator": [
+        248,
+        248,
+        178,
+        96,
+        127,
+        36,
+        22,
+        226
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "ledger",
+          "docs": [
+            "Ledger account to verify previous UTXO hash"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  100,
+                  103,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "utxo",
+          "docs": [
+            "New UTXO account to be created",
+            "PDA: [\"utxo\", utxo_hash]"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  116,
+                  120,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "utxo_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "loader",
+          "docs": [
+            "Loader account containing Kyber ciphertext (will be closed after use)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "zk_proof",
+          "docs": [
+            "ZK Proof account reference"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "utxo_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "encrypted_payload",
+          "type": "bytes"
+        },
+        {
+          "name": "nonce",
+          "type": {
+            "array": [
+              "u8",
+              12
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "deactivate_prover",
+      "docs": [
+        "Deactivate a prover (admin only)"
+      ],
+      "discriminator": [
+        37,
+        2,
+        71,
+        79,
+        48,
+        237,
+        121,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program_config",
+          "docs": [
+            "Program configuration"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "prover_registry",
+          "docs": [
+            "Prover registry"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  118,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "prover_pubkey",
+          "docs": [
+            "Prover's public key to deactivate"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "init_ledger",
+      "docs": [
+        "Initialize the ledger"
+      ],
       "discriminator": [
         91,
         194,
@@ -160,7 +423,99 @@
       "args": []
     },
     {
+      "name": "init_program",
+      "docs": [
+        "Initialize the program with admin authority"
+      ],
+      "discriminator": [
+        56,
+        120,
+        211,
+        99,
+        196,
+        190,
+        129,
+        187
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program_config",
+          "docs": [
+            "Program configuration account"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "prover_registry",
+          "docs": [
+            "Prover registry account"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  118,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "init_vault",
+      "docs": [
+        "Initialize vault with first part of Kyber public key"
+      ],
       "discriminator": [
         77,
         79,
@@ -221,16 +576,19 @@
       ]
     },
     {
-      "name": "transfer",
+      "name": "init_zk_proof",
+      "docs": [
+        "Initialize ZK proof account"
+      ],
       "discriminator": [
-        163,
-        52,
-        200,
-        231,
-        140,
-        3,
-        69,
-        186
+        107,
+        215,
+        148,
+        146,
+        233,
+        68,
+        113,
+        229
       ],
       "accounts": [
         {
@@ -239,7 +597,157 @@
           "signer": true
         },
         {
+          "name": "zk_proof",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "total_bytes",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "register_prover",
+      "docs": [
+        "Register a new prover (admin only)"
+      ],
+      "discriminator": [
+        170,
+        190,
+        182,
+        150,
+        76,
+        46,
+        227,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program_config",
+          "docs": [
+            "Program configuration"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "prover_registry",
+          "docs": [
+            "Prover registry"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  118,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "prover_pubkey",
+          "docs": [
+            "Prover's public key to register"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "unique_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "submit_attestation",
+      "docs": [
+        "Submit attestation vote on a UTXO"
+      ],
+      "discriminator": [
+        238,
+        220,
+        255,
+        105,
+        183,
+        211,
+        40,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "prover_old",
+          "docs": [
+            "The old prover account that will be used to pay for this IX.",
+            "Afterwards, all the remaining lamports will be transferred to the new prover account."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "prover",
+          "docs": [
+            "The new prover submitting their vote",
+            "Their public key will be hashed and checked against the registry",
+            "This becomes the active prover account after key rotation"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
           "name": "ledger",
+          "docs": [
+            "Ledger to verify and update"
+          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -258,8 +766,59 @@
           }
         },
         {
-          "name": "loader",
-          "writable": true
+          "name": "utxo",
+          "docs": [
+            "UTXO being attested"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  116,
+                  120,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "utxo_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "prover_registry",
+          "docs": [
+            "Prover registry"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  118,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "system_program",
@@ -268,15 +827,24 @@
       ],
       "args": [
         {
-          "name": "encrypted_payload",
-          "type": "bytes"
-        },
-        {
-          "name": "nonce",
+          "name": "utxo_hash",
           "type": {
             "array": [
               "u8",
-              12
+              32
+            ]
+          }
+        },
+        {
+          "name": "vote",
+          "type": "bool"
+        },
+        {
+          "name": "next_key_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
             ]
           }
         }
@@ -284,6 +852,9 @@
     },
     {
       "name": "write_loader",
+      "docs": [
+        "Write chunk to loader"
+      ],
       "discriminator": [
         50,
         101,
@@ -307,6 +878,38 @@
         },
         {
           "name": "data",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "write_zk_proof",
+      "docs": [
+        "Write chunk to ZK proof"
+      ],
+      "discriminator": [
+        158,
+        236,
+        115,
+        161,
+        164,
+        17,
+        46,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "zk_proof",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "chunk",
           "type": "bytes"
         }
       ]
@@ -340,6 +943,45 @@
       ]
     },
     {
+      "name": "ProgramConfig",
+      "discriminator": [
+        196,
+        210,
+        90,
+        231,
+        144,
+        149,
+        140,
+        63
+      ]
+    },
+    {
+      "name": "ProverRegistry",
+      "discriminator": [
+        210,
+        201,
+        111,
+        119,
+        245,
+        85,
+        163,
+        11
+      ]
+    },
+    {
+      "name": "Utxo",
+      "discriminator": [
+        210,
+        200,
+        228,
+        232,
+        85,
+        104,
+        216,
+        76
+      ]
+    },
+    {
       "name": "Vault",
       "discriminator": [
         211,
@@ -350,6 +992,177 @@
         152,
         117,
         119
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AirdropCompleted",
+      "discriminator": [
+        191,
+        220,
+        138,
+        226,
+        189,
+        53,
+        3,
+        235
+      ]
+    },
+    {
+      "name": "AttestationSubmitted",
+      "discriminator": [
+        177,
+        213,
+        117,
+        225,
+        166,
+        11,
+        54,
+        218
+      ]
+    },
+    {
+      "name": "LedgerInitialized",
+      "discriminator": [
+        56,
+        38,
+        185,
+        200,
+        94,
+        92,
+        181,
+        202
+      ]
+    },
+    {
+      "name": "LoaderChunkWritten",
+      "discriminator": [
+        100,
+        107,
+        219,
+        86,
+        6,
+        9,
+        103,
+        244
+      ]
+    },
+    {
+      "name": "LoaderInitialized",
+      "discriminator": [
+        232,
+        178,
+        234,
+        13,
+        122,
+        253,
+        41,
+        114
+      ]
+    },
+    {
+      "name": "ProgramInitialized",
+      "discriminator": [
+        43,
+        70,
+        110,
+        241,
+        199,
+        218,
+        221,
+        245
+      ]
+    },
+    {
+      "name": "ProverDeactivated",
+      "discriminator": [
+        124,
+        129,
+        96,
+        166,
+        67,
+        234,
+        34,
+        181
+      ]
+    },
+    {
+      "name": "ProverRegistered",
+      "discriminator": [
+        243,
+        150,
+        169,
+        237,
+        21,
+        205,
+        121,
+        191
+      ]
+    },
+    {
+      "name": "UtxoCreated",
+      "discriminator": [
+        141,
+        33,
+        36,
+        147,
+        147,
+        155,
+        87,
+        98
+      ]
+    },
+    {
+      "name": "VaultCompleted",
+      "discriminator": [
+        174,
+        72,
+        181,
+        184,
+        121,
+        48,
+        107,
+        227
+      ]
+    },
+    {
+      "name": "VaultInitialized",
+      "discriminator": [
+        180,
+        43,
+        207,
+        2,
+        18,
+        71,
+        3,
+        75
+      ]
+    },
+    {
+      "name": "ZkProofChunkWritten",
+      "discriminator": [
+        86,
+        99,
+        62,
+        54,
+        246,
+        173,
+        54,
+        146
+      ]
+    },
+    {
+      "name": "ZkProofInitialized",
+      "discriminator": [
+        41,
+        89,
+        183,
+        101,
+        104,
+        233,
+        152,
+        10
       ]
     }
   ],
@@ -371,34 +1184,414 @@
     },
     {
       "code": 6003,
-      "name": "InvalidHashMismatch",
+      "name": "InvalidPreviousUtxoHash",
       "msg": "Invalid previous UTXO hash provided"
     },
     {
       "code": 6004,
       "name": "PayloadTooLarge",
       "msg": "Payload too large"
+    },
+    {
+      "code": 6005,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow occurred"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidOffset",
+      "msg": "Invalid offset: must match current bytes_written"
+    },
+    {
+      "code": 6007,
+      "name": "ProgramConfigAlreadyInitialized",
+      "msg": "Program config already initialized"
+    },
+    {
+      "code": 6008,
+      "name": "AdminAuthorityNotSet",
+      "msg": "Admin authority not set"
+    },
+    {
+      "code": 6009,
+      "name": "UnauthorizedAdmin",
+      "msg": "Unauthorized: Only admin can perform this action"
+    },
+    {
+      "code": 6010,
+      "name": "ProverAlreadyRegistered",
+      "msg": "Prover already registered"
+    },
+    {
+      "code": 6011,
+      "name": "ProverNotRegistered",
+      "msg": "Prover not registered"
+    },
+    {
+      "code": 6012,
+      "name": "ProverNotActive",
+      "msg": "Prover not active"
+    },
+    {
+      "code": 6013,
+      "name": "ProverAlreadyVoted",
+      "msg": "Prover already voted on this UTXO"
+    },
+    {
+      "code": 6014,
+      "name": "MaxProversReached",
+      "msg": "Maximum provers reached"
+    },
+    {
+      "code": 6015,
+      "name": "MaxVotesReached",
+      "msg": "Maximum votes reached for this UTXO"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidStakeAmount",
+      "msg": "Invalid stake amount"
+    },
+    {
+      "code": 6017,
+      "name": "ProverUniqueIdAlreadyUsed",
+      "msg": "Prover unique ID already used"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidProverUniqueId",
+      "msg": "Invalid prover unique ID. Cannot be zero."
+    },
+    {
+      "code": 6019,
+      "name": "ZkProofAccountNotProvided",
+      "msg": "ZK Proof account not provided"
+    },
+    {
+      "code": 6020,
+      "name": "UtxoHashMismatch",
+      "msg": "UTXO hash mismatch with ledger"
+    },
+    {
+      "code": 6021,
+      "name": "MinAttestationsNotMet",
+      "msg": "Min attestations not met"
     }
   ],
   "types": [
     {
+      "name": "AirdropCompleted",
+      "docs": [
+        "Event emitted when an airdrop is completed"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "utxo",
+            "docs": [
+              "UTXO account PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "utxo_hash",
+            "docs": [
+              "UTXO hash"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "prev_utxo_hash",
+            "docs": [
+              "Previous UTXO hash"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "docs": [
+              "Epoch number"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "payload_size",
+            "docs": [
+              "Encrypted payload size"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "ciphertext_commitment",
+            "docs": [
+              "Ciphertext commitment"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "UTXO PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "new_ledger_count",
+            "docs": [
+              "New ledger count after airdrop"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when created"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AttestationSubmitted",
+      "docs": [
+        "Event emitted when an attestation is submitted"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "utxo",
+            "docs": [
+              "The UTXO being voted on"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "utxo_hash",
+            "docs": [
+              "UTXO hash"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "prover_old",
+            "docs": [
+              "Old prover's public key (before rotation)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "prover_old_hash",
+            "docs": [
+              "Old prover's hash"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "prover_new",
+            "docs": [
+              "New prover's public key (after rotation)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "prover_unique_id",
+            "docs": [
+              "Prover's unique ID"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "vote",
+            "docs": [
+              "The vote (true=valid, false=invalid)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "next_key_hash",
+            "docs": [
+              "Hash of prover's next public key (for next rotation)"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "lamports_transferred",
+            "docs": [
+              "Lamports transferred"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "valid_votes",
+            "docs": [
+              "Current count of valid votes"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "invalid_votes",
+            "docs": [
+              "Current count of invalid votes"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "total_votes",
+            "docs": [
+              "Total votes received"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "threshold_met",
+            "docs": [
+              "Whether threshold was met"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "new_ledger_tip",
+            "docs": [
+              "New ledger tip hash (if threshold met)"
+            ],
+            "type": {
+              "option": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "new_ledger_count",
+            "docs": [
+              "New ledger count (if threshold met)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when submitted"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Ledger",
+      "docs": [
+        "Ledger account that tracks the last valid UTXO hash"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "count",
+            "docs": [
+              "Total number of valid UTXOs"
+            ],
             "type": "u64"
           },
           {
-            "name": "utxos",
+            "name": "last_valid_utxo_hash",
+            "docs": [
+              "Hash of the last valid UTXO (genesis is all zeros)"
+            ],
             "type": {
-              "vec": {
-                "defined": {
-                  "name": "Utxo"
-                }
-              }
+              "array": [
+                "u8",
+                32
+              ]
             }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LedgerInitialized",
+      "docs": [
+        "Event emitted when the ledger is initialized"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "count",
+            "docs": [
+              "Initial count (should be 0)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "genesis_hash",
+            "docs": [
+              "Genesis hash (all zeros)"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Ledger PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when initialized"
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -421,16 +1614,384 @@
       }
     },
     {
+      "name": "LoaderChunkWritten",
+      "docs": [
+        "Event emitted when a chunk is written to the loader"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "loader",
+            "docs": [
+              "Loader account address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "chunk_size",
+            "docs": [
+              "Chunk size in bytes"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "offset",
+            "docs": [
+              "Offset where chunk was written"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "end",
+            "docs": [
+              "End position after write"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when written"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LoaderInitialized",
+      "docs": [
+        "Event emitted when a loader is initialized"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "loader",
+            "docs": [
+              "Loader account address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Size of the loader account"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when initialized"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProgramConfig",
+      "docs": [
+        "Program configuration account"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin_authority",
+            "docs": [
+              "Admin authority who can manage provers"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "min_attestations",
+            "docs": [
+              "Minimum attestations required for UTXO validity"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProgramInitialized",
+      "docs": [
+        "Event emitted when the program is initialized"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "docs": [
+              "Admin authority who initialized the program"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "min_attestations",
+            "docs": [
+              "Minimum attestations required for UTXO validity"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "config_bump",
+            "docs": [
+              "Program config PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "registry_bump",
+            "docs": [
+              "Prover registry PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when initialized"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProverDeactivated",
+      "docs": [
+        "Event emitted when a prover is deactivated"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "docs": [
+              "Admin who deactivated the prover"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "prover_pubkey",
+            "docs": [
+              "Prover's public key that was deactivated"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "prover_pubkey_hash",
+            "docs": [
+              "Hash of prover's public key"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when deactivated"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProverInfo",
+      "docs": [
+        "Information about a single prover"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "unique_id",
+            "docs": [
+              "Unique identifier for the prover"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "pubkey_hash",
+            "docs": [
+              "Hash of prover's current public key"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether the prover is currently active"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProverRegistered",
+      "docs": [
+        "Event emitted when a new prover is registered"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "docs": [
+              "Admin who registered the prover"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "unique_id",
+            "docs": [
+              "Unique identifier for the prover"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "prover_pubkey",
+            "docs": [
+              "Prover's public key"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "prover_pubkey_hash",
+            "docs": [
+              "Hash of prover's public key"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "total_provers",
+            "docs": [
+              "Total number of provers after registration"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when registered"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProverRegistry",
+      "docs": [
+        "Prover registry account"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "prover_count",
+            "docs": [
+              "Number of registered provers"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "provers",
+            "docs": [
+              "Array of prover information"
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "ProverInfo"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProverVote",
+      "docs": [
+        "Vote record for a prover on a UTXO"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "prover_id",
+            "docs": [
+              "Unique ID of the prover"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_valid",
+            "docs": [
+              "Vote value: true = valid, false = invalid"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "Utxo",
+      "docs": [
+        "UTXO account structure",
+        "Used for both regular UTXOs (with voting) and airdrop UTXOs (without voting)"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "epoch",
+            "docs": [
+              "Epoch number"
+            ],
             "type": "u32"
           },
           {
             "name": "utxo_hash",
+            "docs": [
+              "Hash of this UTXO"
+            ],
             "type": {
               "array": [
                 "u8",
@@ -440,6 +2001,9 @@
           },
           {
             "name": "prev_utxo_hash",
+            "docs": [
+              "Hash of previous UTXO"
+            ],
             "type": {
               "array": [
                 "u8",
@@ -449,6 +2013,9 @@
           },
           {
             "name": "ciphertext_commitment",
+            "docs": [
+              "SHA256 commitment of ciphertext+payload+nonce"
+            ],
             "type": {
               "array": [
                 "u8",
@@ -458,6 +2025,9 @@
           },
           {
             "name": "nonce",
+            "docs": [
+              "ChaCha20 nonce for decryption"
+            ],
             "type": {
               "array": [
                 "u8",
@@ -467,16 +2037,145 @@
           },
           {
             "name": "encrypted_payload",
+            "docs": [
+              "Encrypted payload data"
+            ],
             "type": "bytes"
           },
           {
             "name": "kyber_ciphertext",
+            "docs": [
+              "Kyber ciphertext for shared secret"
+            ],
             "type": {
               "array": [
                 "u8",
                 1088
               ]
             }
+          },
+          {
+            "name": "zk_proof_pubkey",
+            "docs": [
+              "Reference to ZK proof account (None for airdrop UTXOs)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "votes",
+            "docs": [
+              "Map of prover votes (None for airdrop UTXOs - immediately finalized)"
+            ],
+            "type": {
+              "option": {
+                "array": [
+                  {
+                    "defined": {
+                      "name": "ProverVote"
+                    }
+                  },
+                  10
+                ]
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UtxoCreated",
+      "docs": [
+        "Event emitted when a UTXO is created"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "utxo",
+            "docs": [
+              "UTXO account PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "utxo_hash",
+            "docs": [
+              "UTXO hash"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "prev_utxo_hash",
+            "docs": [
+              "Previous UTXO hash"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "docs": [
+              "Epoch number"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "payload_size",
+            "docs": [
+              "Encrypted payload size"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "zk_proof",
+            "docs": [
+              "ZK proof reference"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "ciphertext_commitment",
+            "docs": [
+              "Ciphertext commitment"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "UTXO PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when created"
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -497,6 +2196,181 @@
           {
             "name": "kyber_pubkey",
             "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultCompleted",
+      "docs": [
+        "Event emitted when a vault is completed"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "docs": [
+              "Vault PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_length",
+            "docs": [
+              "Total length of the Kyber public key"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "key_hash",
+            "docs": [
+              "Hash of the Kyber public key"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when completed"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultInitialized",
+      "docs": [
+        "Event emitted when a vault is initialized"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "Owner of the vault"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Vault PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "docs": [
+              "Version of the vault"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "chunk1_length",
+            "docs": [
+              "Length of the first chunk"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when initialized"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZkProofChunkWritten",
+      "docs": [
+        "Event emitted when a chunk is written to the ZK proof"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "zk_proof",
+            "docs": [
+              "ZK proof account address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "chunk_size",
+            "docs": [
+              "Chunk size in bytes"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "offset",
+            "docs": [
+              "Offset where chunk was written"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "new_bytes_written",
+            "docs": [
+              "New bytes written"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "total_length",
+            "docs": [
+              "Total length"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when written"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZkProofInitialized",
+      "docs": [
+        "Event emitted when a ZK proof account is initialized"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "zk_proof",
+            "docs": [
+              "ZK proof account address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_bytes",
+            "docs": [
+              "Total bytes allocated"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp when initialized"
+            ],
+            "type": "i64"
           }
         ]
       }

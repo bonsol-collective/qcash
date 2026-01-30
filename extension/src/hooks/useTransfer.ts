@@ -95,14 +95,7 @@ export const useTransfer = () => {
         );
         const ledgerAccount = await program.account.ledger.fetch(ledgerPda);
 
-        let tip: Uint8Array;
-
-        if (ledgerAccount.utxos.length === 0) {
-            tip = new Uint8Array(32).fill(0);
-        } else {
-            const last = ledgerAccount.utxos[ledgerAccount.utxos.length - 1];
-            tip = new Uint8Array(last.utxoHash);
-        }
+        const tip = new Uint8Array(ledgerAccount.lastValidUtxoHash);
 
         return {
             tip,

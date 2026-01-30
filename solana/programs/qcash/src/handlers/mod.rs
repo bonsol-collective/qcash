@@ -10,6 +10,7 @@ pub mod create_utxo;
 pub mod register_prover;
 pub mod deactivate_prover;
 pub mod submit_attestation;
+pub mod airdrop;
 
 pub use init_vault::*;
 pub use complete_vault::*;
@@ -23,3 +24,4 @@ pub use create_utxo::*;
 pub use register_prover::*;
 pub use deactivate_prover::*;
 pub use submit_attestation::*;
+pub use airdrop::*;

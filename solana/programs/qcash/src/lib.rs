@@ -97,4 +97,15 @@ pub mod solana_programs {
     ) -> Result<()> {
         submit_attestation::submit_attestation(ctx, utxo_hash, vote, next_key_hash)
     }
+
+    /// Airdrop tokens to a vault without proof verification
+    pub fn airdrop(
+        ctx: Context<Airdrop>,
+        utxo_hash: [u8; 32],
+        encrypted_payload: Vec<u8>,
+        nonce: [u8; 12],
+        epoch: u32,
+    ) -> Result<()> {
+        airdrop::airdrop(ctx, utxo_hash, encrypted_payload, nonce, epoch)
+    }
 }

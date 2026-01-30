@@ -26,6 +26,7 @@ impl ProverVote {
 }
 
 /// UTXO account structure
+/// Used for both regular UTXOs (with voting) and airdrop UTXOs (without voting)
 #[account]
 pub struct Utxo {
     /// Epoch number
@@ -49,11 +50,11 @@ pub struct Utxo {
     /// Kyber ciphertext for shared secret
     pub kyber_ciphertext: [u8; KYBER_CIPHERTEXT_SIZE],
     
-    /// Reference to ZK proof account
-    pub zk_proof_pubkey: Pubkey,
+    /// Reference to ZK proof account (None for airdrop UTXOs)
+    pub zk_proof_pubkey: Option<Pubkey>,
     
-    /// Map of prover votes (prover_id -> vote)
-    pub votes: [ProverVote; MAX_VOTES_ALLOWED],
+    /// Map of prover votes (None for airdrop UTXOs - immediately finalized)
+    pub votes: Option<[ProverVote; MAX_VOTES_ALLOWED]>,
     
     /// Bump seed for PDA
     pub bump: u8,
@@ -70,13 +71,29 @@ impl Utxo {
         NONCE_SIZE + // nonce
         4 + payload_len + // encrypted_payload (Vec prefix + data)
         KYBER_CIPHERTEXT_SIZE + // kyber_ciphertext
-        32 + // zk_proof_pubkey
-        (ProverVote::SIZE * MAX_VOTES_ALLOWED) + // votes array
+        1 + 32 + // zk_proof_pubkey (Option tag + Pubkey)
+        1 + (ProverVote::SIZE * MAX_VOTES_ALLOWED) + // votes (Option tag + array)
         1 + // bump
         128 // padding
     }
 
-    /// Initialize a new UTXO
+    /// Calculate size for airdrop UTXOs (without voting fields)
+    pub fn size_airdrop(payload_len: usize) -> usize {
+        8 + // discriminator
+        4 + // epoch
+        32 + // utxo_hash
+        32 + // prev_utxo_hash
+        32 + // ciphertext_commitment
+        NONCE_SIZE + // nonce
+        4 + payload_len + // encrypted_payload (Vec prefix + data)
+        KYBER_CIPHERTEXT_SIZE + // kyber_ciphertext
+        1 + // zk_proof_pubkey (Option tag, None = 1 byte)
+        1 + // votes (Option tag, None = 1 byte)
+        1 + // bump
+        64 // padding
+    }
+
+    /// Initialize a new UTXO with voting (regular create_utxo flow)
     pub fn initialize(
         &mut self,
         epoch: u32,
@@ -96,28 +113,59 @@ impl Utxo {
         self.nonce = nonce;
         self.encrypted_payload = encrypted_payload;
         self.kyber_ciphertext = kyber_ciphertext;
-        self.zk_proof_pubkey = zk_proof_pubkey;
-        self.votes = [ProverVote::default(); MAX_VOTES_ALLOWED];
+        self.zk_proof_pubkey = Some(zk_proof_pubkey);
+        self.votes = Some([ProverVote::default(); MAX_VOTES_ALLOWED]);
         self.bump = bump;
     }
 
-    /// Record a vote from a prover
+    /// Initialize a new UTXO without voting (airdrop flow - immediately finalized)
+    pub fn initialize_airdrop(
+        &mut self,
+        epoch: u32,
+        utxo_hash: [u8; 32],
+        prev_utxo_hash: [u8; 32],
+        ciphertext_commitment: [u8; 32],
+        nonce: [u8; NONCE_SIZE],
+        encrypted_payload: Vec<u8>,
+        kyber_ciphertext: [u8; KYBER_CIPHERTEXT_SIZE],
+        bump: u8,
+    ) {
+        self.epoch = epoch;
+        self.utxo_hash = utxo_hash;
+        self.prev_utxo_hash = prev_utxo_hash;
+        self.ciphertext_commitment = ciphertext_commitment;
+        self.nonce = nonce;
+        self.encrypted_payload = encrypted_payload;
+        self.kyber_ciphertext = kyber_ciphertext;
+        self.zk_proof_pubkey = None;
+        self.votes = None;
+        self.bump = bump;
+    }
+
+    /// Check if this UTXO requires voting (not an airdrop)
+    pub fn requires_voting(&self) -> bool {
+        self.votes.is_some()
+    }
+
+    /// Record a vote from a prover (only for non-airdrop UTXOs)
     pub fn record_vote(&mut self, prover_unique_id: u64, is_valid: bool) -> Result<()> {
-        // Check if prover has already voted
+        // Check if prover has already voted (immutable borrow first)
         require!(
             !self.has_prover_voted(prover_unique_id),
             ErrorCode::ProverAlreadyVoted
         );
+        
+        // Now take mutable borrow
+        let votes = self.votes.as_mut().ok_or(ErrorCode::MaxVotesReached)?;
 
         // Find first empty slot
-        let empty_slot = self
-            .votes
+        let empty_slot = votes
             .iter()
             .position(|vote| !vote.is_used())
             .ok_or(ErrorCode::MaxVotesReached)?;
 
         // Record the vote
-        self.votes[empty_slot] = ProverVote::new(prover_unique_id, is_valid);
+        votes[empty_slot] = ProverVote::new(prover_unique_id, is_valid);
 
         Ok(())
     }
@@ -125,29 +173,33 @@ impl Utxo {
     /// Checks if a prover has already voted
     pub fn has_prover_voted(&self, prover_unique_id: u64) -> bool {
         self.votes
-            .iter()
-            .any(|vote| vote.is_used() && vote.prover_id == prover_unique_id)
+            .as_ref()
+            .map(|votes| votes.iter().any(|vote| vote.is_used() && vote.prover_id == prover_unique_id))
+            .unwrap_or(false)
     }
 
     /// Gets the number of valid votes
     pub fn get_valid_votes(&self) -> u16 {
         self.votes
-            .iter()
-            .filter(|vote| vote.is_used() && vote.is_valid)
-            .count() as u16
+            .as_ref()
+            .map(|votes| votes.iter().filter(|vote| vote.is_used() && vote.is_valid).count() as u16)
+            .unwrap_or(0)
     }
 
     /// Gets the number of invalid votes
     pub fn get_invalid_votes(&self) -> u16 {
         self.votes
-            .iter()
-            .filter(|vote| vote.is_used() && !vote.is_valid)
-            .count() as u16
+            .as_ref()
+            .map(|votes| votes.iter().filter(|vote| vote.is_used() && !vote.is_valid).count() as u16)
+            .unwrap_or(0)
     }
 
     /// Gets the total number of votes
     pub fn get_total_votes(&self) -> u16 {
-        self.votes.iter().filter(|vote| vote.is_used()).count() as u16
+        self.votes
+            .as_ref()
+            .map(|votes| votes.iter().filter(|vote| vote.is_used()).count() as u16)
+            .unwrap_or(0)
     }
 
     /// Checks if minimum attestations threshold is met
@@ -155,3 +207,4 @@ impl Utxo {
         self.get_valid_votes() >= min_attestations
     }
 }
+

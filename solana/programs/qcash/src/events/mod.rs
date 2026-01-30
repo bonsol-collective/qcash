@@ -14,6 +14,7 @@ pub mod zk_proof_initialized;
 pub mod zk_proof_chunk_written;
 pub mod utxo_created;
 pub mod attestation_submitted;
+pub mod airdrop_completed;
 
 pub use program_initialized::*;
 pub use prover_registered::*;
@@ -27,3 +28,4 @@ pub use zk_proof_initialized::*;
 pub use zk_proof_chunk_written::*;
 pub use utxo_created::*;
 pub use attestation_submitted::*;
+pub use airdrop_completed::*;
