@@ -1,5 +1,6 @@
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{path::Path, time::Duration};
 
+use anchor_lang::prelude::*;
 use anyhow::{Error, Result, anyhow};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use futures::{StreamExt, stream};
@@ -9,12 +10,15 @@ use risc0_zkvm::Receipt;
 use sha3::{Digest, Keccak256};
 use solana_client::{
     nonblocking::rpc_client::RpcClient,
-    rpc_config::{CommitmentConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter},
+    rpc_config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter},
 };
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
-use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair, signer::Signer};
+//use solana_sdk::{signature::Keypair, signer::Signer};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
+
+pub const IMAGE_ID: [u8; 32] = [0; 32];
 
 /// Solana Key Manager for handling key rotation and management
 pub struct SolanaKeyManager {
@@ -204,10 +208,10 @@ impl QcashNode {
                         "ZK Proof upload complete! Total bytes: {}",
                         chunk_event.total_length
                     );
-
+                    // merge download_proof and verify_proof into a single function. AI!
                     let proof = download_proof(&chunk_event.zk_proof, rpc_client).await;
                     match proof {
-                        Ok(p) => verify_proof(&p),
+                        Ok(p) => verify_proof(p),
                         Err(e) => info!("Failed to download proof: {}", e),
                     }
                 } else {
@@ -245,10 +249,8 @@ async fn download_proof(proof_account: &Pubkey, rpc_client: &RpcClient) -> Resul
     Ok(bincode::deserialize(&registry_data)?)
 }
 
-fn verify_proof(proof: &[u8]) {
-    // Placeholder implementation
-    // In a real scenario, this would verify the risc0 Receipt.
-    info!("Verifying proof of length: {}", proof.len());
+fn verify_proof(receipt: Receipt) {
+    receipt.verify(IMAGE_ID);
 }
 
 async fn events_subscription(
