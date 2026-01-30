@@ -181,15 +181,14 @@ pub struct QcashNodeConfig {
 
 impl QcashNodeConfig {
     pub fn new_from_env() -> Result<Self> {
-        // if rpc and websocket is not set, default to localhost (8899/8900). AI!
         let current_key_file = std::env::var("SOLANA_CURRENT_KEY_FILE")
             .map_err(|_| anyhow!("SOLANA_CURRENT_KEY_FILE environment variable not set"))?;
         let previous_key_file = std::env::var("SOLANA_PREVIOUS_KEY_FILE").ok();
         let next_key_file = std::env::var("SOLANA_NEXT_KEY_FILE").ok();
         let websocket_url = std::env::var("SOLANA_WEBSOCKET_URL")
-            .map_err(|_| anyhow!("SOLANA_WEBSOCKET_URL environment variable not set"))?;
+            .unwrap_or_else(|_| "ws://localhost:8900".to_string());
         let rpc_url = std::env::var("SOLANA_RPC_URL")
-            .map_err(|_| anyhow!("SOLANA_RPC_URL environment variable not set"))?;
+            .unwrap_or_else(|_| "http://localhost:8899".to_string());
         let generate_keys = std::env::var("GENERATE_KEYS")
             .map(|v| v.to_lowercase() == "true")
             .unwrap_or(false);
