@@ -150,7 +150,27 @@ pub struct QcashNodeConfig {
     pub rpc_url: String,
 }
 
-//implement qcashnodeconfig::new_from_env(). AI!
+impl QcashNodeConfig {
+    pub fn new_from_env() -> Result<Self> {
+        let current_key_file = std::env::var("SOLANA_CURRENT_KEY_FILE")
+            .map_err(|_| anyhow!("SOLANA_CURRENT_KEY_FILE environment variable not set"))?;
+        let previous_key_file = std::env::var("SOLANA_PREVIOUS_KEY_FILE")
+            .map_err(|_| anyhow!("SOLANA_PREVIOUS_KEY_FILE environment variable not set"))?;
+        let next_key_file = std::env::var("SOLANA_NEXT_KEY_FILE").ok();
+        let websocket_url = std::env::var("SOLANA_WEBSOCKET_URL")
+            .map_err(|_| anyhow!("SOLANA_WEBSOCKET_URL environment variable not set"))?;
+        let rpc_url = std::env::var("SOLANA_RPC_URL")
+            .map_err(|_| anyhow!("SOLANA_RPC_URL environment variable not set"))?;
+
+        Ok(Self {
+            previous_key_file,
+            current_key_file,
+            next_key_file,
+            websocket_url,
+            rpc_url,
+        })
+    }
+}
 
 pub struct QcashNode {
     key_manager: Mutex<SolanaKeyManager>,
