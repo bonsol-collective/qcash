@@ -67,7 +67,33 @@ impl SolanaKeyManager {
         })
     }
 
-    // add new_with_new_keys that will generate all keys instead of loading them. AI!
+    /// Create a new SolanaKeyManager by generating all new keys
+    pub fn new_with_new_keys(
+        current_key_file: String,
+        next_key_file: String,
+        previous_key_file: String,
+    ) -> Result<Self> {
+        info!("Generating all new Solana keys");
+
+        // Generate all three keys
+        Self::generate_solana_key(&current_key_file)?;
+        Self::generate_solana_key(&next_key_file)?;
+        Self::generate_solana_key(&previous_key_file)?;
+
+        // Load the generated keys
+        let previous_key = Self::load_solana_key(&previous_key_file)?;
+        let current_key = Self::load_solana_key(&current_key_file)?;
+        let next_key = Self::load_solana_key(&next_key_file)?;
+
+        Ok(Self {
+            current_key_file,
+            next_key_file,
+            previous_key_file,
+            current_key,
+            next_key,
+            previous_key,
+        })
+    }
 
     /// Load Solana keypair from file
     fn load_solana_key(key_file: impl AsRef<Path>) -> Result<Keypair> {
