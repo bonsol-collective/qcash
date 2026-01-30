@@ -2,6 +2,7 @@
 //!
 //! This module defines the various events emitted by the qcash program during its operations.
 
+pub mod airdrop_completed;
 pub mod attestation_submitted;
 pub mod ledger_initialized;
 pub mod loader_chunk_written;
@@ -15,6 +16,8 @@ pub mod vault_initialized;
 pub mod zk_proof_chunk_written;
 pub mod zk_proof_initialized;
 
+pub use airdrop_completed::*;
+pub use attestation_submitted::*;
 pub use attestation_submitted::*;
 pub use ledger_initialized::*;
 pub use loader_chunk_written::*;
