@@ -13,8 +13,7 @@ pub mod utxo_created;
 pub mod vault_completed;
 pub mod vault_initialized;
 pub mod zk_proof_chunk_written;
-pub mod utxo_created;
-pub mod attestation_submitted;
+pub mod zk_proof_initialized;
 
 pub use attestation_submitted::*;
 pub use ledger_initialized::*;
@@ -27,5 +26,19 @@ pub use utxo_created::*;
 pub use vault_completed::*;
 pub use vault_initialized::*;
 pub use zk_proof_chunk_written::*;
-pub use utxo_created::*;
-pub use attestation_submitted::*;
+pub use zk_proof_initialized::*;
+
+pub enum QcashEvent {
+    AttestationSubmitted(AttestationSubmitted),
+    LedgerInitialized(LedgerInitialized),
+    LoaderChunkWritten(LoaderChunkWritten),
+    LoaderInitialized(LoaderInitialized),
+    ProgramInitialized(ProgramInitialized),
+    ProverDeactivated(ProverDeactivated),
+    ProverRegistered(ProverRegistered),
+    UtxoCreated(UtxoCreated),
+    VaultCompleted(VaultCompleted),
+    VaultInitialized(VaultInitialized),
+    ZkProofChunkWritten(ZkProofChunkWritten),
+    ZkProofInitialized(ZkProofInitialized),
+}
