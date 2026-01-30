@@ -244,7 +244,9 @@ impl QcashNode {
             SolanaKeyManager::new(current_key_file, next_key_file, previous_key_file)?
         };
 
-        // print the previous key (call it current key) and the current key (call it next key). AI!
+        // print the previous key (call it current key) and the current key (call it next key)
+        info!("Previous key (current key): {}", key_manager.previous_key().pubkey());
+        info!("Current key (next key): {}", key_manager.current_key().pubkey());
 
         Ok(QcashNode {
             key_manager: Mutex::new(key_manager),
