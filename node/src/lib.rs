@@ -136,17 +136,18 @@ impl SolanaKeyManager {
     }
 }
 
-//add rpc_url. AI!
 pub struct QcashNodeConfig {
     pub previous_key_file: String,
     pub current_key_file: String,
     pub next_key_file: Option<String>, //Default current-key + .next
     pub websocket_url: String,
+    pub rpc_url: String,
 }
 
 pub struct QcashNode {
     key_manager: SolanaKeyManager,
     websocket_url: String,
+    rpc_url: String,
 }
 
 impl QcashNode {
@@ -163,6 +164,7 @@ impl QcashNode {
         Ok(QcashNode {
             key_manager,
             websocket_url: config.websocket_url,
+            rpc_url: config.rpc_url,
         })
     }
 
@@ -178,8 +180,9 @@ impl QcashNode {
         });
 
         // Spawn the event processing thread
+        let rpc_url = self.rpc_url.clone();
         tokio::spawn(async move {
-            let rpc_client = RpcClient::new(self.rpc_url);
+            let rpc_client = RpcClient::new(rpc_url);
             while let Some(event) = rx.recv().await {
                 Self::process_event(event, &rpc_client).await;
             }
