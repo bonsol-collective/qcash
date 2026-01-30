@@ -182,10 +182,44 @@ impl QcashNode {
     }
 
     async fn process_event(event: Vec<u8>) {
-        // Stub: Parse and process the event
-        // parse the event object (as defined in solana/programs/qcash) and process the a ZkProofChunkWritten message, and make sure the number of bytes uploaded matches the total. AI!
-        info!("Processing event: {:?}", event);
-        // TODO: Implement actual parsing and processing logic
+        // Parse the event object and process ZkProofChunkWritten messages
+        match qcash_events::QcashEvent::parse(&event) {
+            Ok(qcash_events::QcashEvent::ZkProofChunkWritten(chunk_event)) => {
+                info!(
+                    "ZK Proof chunk written: {} bytes at offset {}, total length: {}",
+                    chunk_event.new_bytes_written, chunk_event.offset, chunk_event.total_length
+                );
+                
+                // Verify that the number of bytes uploaded matches the total
+                if chunk_event.offset + chunk_event.new_bytes_written == chunk_event.total_length {
+                    info!("ZK Proof upload complete! Total bytes: {}", chunk_event.total_length);
+                } else {
+                    info!(
+                        "ZK Proof upload in progress: {}/{} bytes",
+                        chunk_event.offset + chunk_event.new_bytes_written,
+                        chunk_event.total_length
+                    );
+                }
+            }
+            Ok(qcash_events::QcashEvent::UtxoCreated(utxo_event)) => {
+                info!(
+                    "UTXO created: {:?}, epoch: {}",
+                    utxo_event.utxo_hash, utxo_event.epoch
+                );
+            }
+            Ok(qcash_events::QcashEvent::VaultCompleted(vault_event)) => {
+                info!(
+                    "Vault completed for key hash: {:?}, total length: {}",
+                    vault_event.key_hash, vault_event.total_length
+                );
+            }
+            Ok(event) => {
+                info!("Received event: {:?}", event);
+            }
+            Err(e) => {
+                info!("Failed to parse event: {}", e);
+            }
+        }
     }
 }
 
