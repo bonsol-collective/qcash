@@ -36,9 +36,6 @@ export type SolanaPrograms = {
         },
         {
           "name": "ledger",
-          "docs": [
-            "Ledger account - will be updated with new tip"
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -113,6 +110,15 @@ export type SolanaPrograms = {
             "array": [
               "u8",
               12
+            ]
+          }
+        },
+        {
+          "name": "ciphertextCommitment",
+          "type": {
+            "array": [
+              "u8",
+              32
             ]
           }
         },

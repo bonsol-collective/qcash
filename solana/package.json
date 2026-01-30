@@ -2,7 +2,7 @@
   "license": "ISC",
   "scripts": {
     "build": "anchor build",
-    "sync-idl": "cp target/idl/solana_programs.json ../extension/src/idl/qcash_program.json && cp target/idl/solana_programs.json ../qcash-faucet/backend-ts/src/idl/solana_programs.json && cp target/types/solana_programs.ts ../qcash-faucet/backend-ts/src/idl/solana_programs.ts && echo 'IDL synced to extension and backend-ts'",
+    "sync-idl": "cp target/idl/solana_programs.json ../extension/src/idl/qcash_program.json && cp target/types/solana_programs.ts ../extension/src/idl/solana_programs.ts && cp target/idl/solana_programs.json ../qcash-faucet/backend-ts/src/idl/solana_programs.json && cp target/types/solana_programs.ts ../qcash-faucet/backend-ts/src/idl/solana_programs.ts && echo 'IDL synced to extension and backend-ts'",
     "build:sync": "npm run build && npm run sync-idl",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"

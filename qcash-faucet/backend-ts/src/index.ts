@@ -40,39 +40,36 @@ app.post("/airdrop", async (req, res) => {
         const kyberKey = Uint8Array.from(vaultAccount.kyberPubkey);
         console.log("kyberKey", kyberKey);
 
-        // Encapsulate (KEM) using WASM
-        const encapResult = wasm.encapsulate(kyberKey);
-
-        const ciphertext = Uint8Array.from(encapResult.ciphertext);
-        const sharedSecret = Uint8Array.from(encapResult.shared_secret);
-
-        console.log("Kyber Encapsulation Success via WASM");
-
         const epoch = 0;
-
-        // Construct & Encrypt Payload using WASM
         const amount = BigInt(100); // 100 tokens
-        const payloadResult = wasm.encrypt_payload(
-            sharedSecret,
-            new Uint8Array(vaultPubKey.toBuffer()),
-            amount,
-            false,
+
+        // Get the current ledger tip hash for prev_utxo_hash
+        const [ledgerPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("ledger")],
+            program.programId
+        );
+        const ledgerAccount = await program.account.ledger.fetch(ledgerPda);
+        const prevUtxoHash = new Uint8Array(ledgerAccount.lastValidUtxoHash);
+
+        const outputResult = wasm.prepare_output(
+            kyberKey,                               // receiver kyber public key
+            new Uint8Array(vaultPubKey.toBuffer()), // vault PDA (receiver_vault in payload)
+            amount,                                 // amount
+            prevUtxoHash,                           // prev_utxo_hash (ledger tip)
+            epoch,                                  // epoch
+            false                                   // is_return
         );
 
-        const encryptedPayload = Uint8Array.from(payloadResult.encrypted_payload);
-        const nonce = Uint8Array.from(payloadResult.nonce);
+        // Extract values from prepare_output result
+        const utxoHash = Buffer.from(outputResult.utxo_hash);
+        const encryptedPayload = Uint8Array.from(outputResult.encrypted_payload);
+        const nonce = Uint8Array.from(outputResult.nonce);
+        const kyberCiphertext = Uint8Array.from(outputResult.kyber_ciphertext);
+        const ciphertextCommitment = Buffer.from(outputResult.ciphertext_commitment);
 
-        console.log("Payload Encrypted successfully", payloadResult.encrypted_payload);
-
-        // Calculate UTXO hash from the encrypted payload + nonce + epoch
-        // Using sha256 of concatenated data as utxo_hash
-        const hashInput = Buffer.concat([
-            Buffer.from(encryptedPayload),
-            Buffer.from(nonce),
-            Buffer.from(new Uint32Array([epoch]).buffer)
-        ]);
-        const utxoHash = crypto.createHash("sha256").update(hashInput).digest();
+        console.log("Payload prepared with correct commitment");
         console.log("UTXO Hash:", utxoHash.toString("hex"));
+        console.log("Ciphertext Commitment:", ciphertextCommitment.toString("hex"));
 
         // Step 1: Upload Ciphertext via Loader
         const loaderKeypair = Keypair.generate();
@@ -88,13 +85,13 @@ app.post("/airdrop", async (req, res) => {
 
         console.log("Loader Initialized", initTx);
 
-        // - Upload Chunks (split 1088 bytes into chunks)
-        const totalSize = ciphertext.length;
+        // - Upload Chunks (split 1088 bytes kyber ciphertext into chunks)
+        const totalSize = kyberCiphertext.length;
         let offset = 0;
 
         while (offset < totalSize) {
             const end = Math.min(offset + CHUNKS_SIZE, totalSize);
-            const chunk = ciphertext.slice(offset, end);
+            const chunk = kyberCiphertext.slice(offset, end);
 
             await program.methods.writeLoader(offset, Buffer.from(chunk))
                 .accounts({
@@ -106,14 +103,9 @@ app.post("/airdrop", async (req, res) => {
             offset = end;
         }
 
-        console.log("Ciphertext uploaded successfully");
+        console.log("Kyber ciphertext uploaded successfully");
 
-        // Step 2: Call Airdrop instruction (creates UTXO and immediately finalizes)
-        const [ledgerPda] = PublicKey.findProgramAddressSync(
-            [Buffer.from("ledger")],
-            program.programId
-        );
-
+        // Step 2: Call Airdrop instruction
         // Derive the UTXO PDA (uses same 'utxo' seed as regular UTXOs)
         const [utxoPda] = PublicKey.findProgramAddressSync(
             [Buffer.from("utxo"), utxoHash],
@@ -127,6 +119,7 @@ app.post("/airdrop", async (req, res) => {
             Array.from(utxoHash) as number[],
             Buffer.from(encryptedPayload),
             Array.from(nonce) as number[],
+            Array.from(ciphertextCommitment) as number[],
             epoch
         )
             .accounts({

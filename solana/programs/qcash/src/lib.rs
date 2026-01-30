@@ -104,8 +104,9 @@ pub mod solana_programs {
         utxo_hash: [u8; 32],
         encrypted_payload: Vec<u8>,
         nonce: [u8; 12],
+        ciphertext_commitment: [u8; 32],
         epoch: u32,
     ) -> Result<()> {
-        airdrop::airdrop(ctx, utxo_hash, encrypted_payload, nonce, epoch)
+        airdrop::airdrop(ctx, utxo_hash, encrypted_payload, nonce, ciphertext_commitment, epoch)
     }
 }

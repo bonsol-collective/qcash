@@ -105,14 +105,14 @@ export const useTransfer = () => {
 
     const executeSend = async (amountToSend: number, receiverVault: string) => {
 
-
+        // we are settting receiverKey in prepareTransaction
         if (!receiverKey || !keys?.kyberSecretKey) {
             throw new Error("Receiver key or secret key not found");
         }
         try {
 
             const kyberKeyHash = await getKyberKeyHash(keys.kyberPublicKey);
-            const [_myVaultPda, myVaultBump] = PublicKey.findProgramAddressSync(
+            const [myVaultPda, myVaultBump] = PublicKey.findProgramAddressSync(
                 [Buffer.from("vault"), Buffer.from(kyberKeyHash)],
                 PROGRAM_ID
             );
@@ -131,8 +131,12 @@ export const useTransfer = () => {
             // Encrypting Payload (WASM)
             setStatus('encrypting');
 
+            console.log("Receiver Vault PDA:", receiverVault);
+            console.log("My Vault PDA:", myVaultPda.toBase58());
+
             const receiverOutput = await wasm.prepare_output(
-                receiverKey, // raw Uint8Array bytes
+                receiverKey,                                         // raw Uint8Array bytes
+                new Uint8Array(new PublicKey(receiverVault).toBuffer()), // receiver's vault PDA
                 BigInt(amountToSend),
                 currentTip,
                 currentEpoch,
@@ -142,8 +146,10 @@ export const useTransfer = () => {
             // This hash will links to the receiver UTXO
             const prevHash = new Uint8Array(receiverOutput.utxo_hash);
 
+            // For return output, use sender's own vault PDA
             const returnOutput = await wasm.prepare_output(
                 new Uint8Array(keys.kyberPublicKey),
+                new Uint8Array(new PublicKey(myVaultPda).toBuffer()), // sender's vault PDA
                 BigInt(returnAmount),
                 prevHash,
                 currentEpoch,

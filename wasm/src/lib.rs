@@ -256,6 +256,7 @@ pub fn hash_payload_internal(payload:&UTXOEncryptedPayload)->[u8;32]{
 #[wasm_bindgen]
 pub fn prepare_output(
     receiver_pubkey_bytes:&[u8],
+    receiver_vault_pda: &[u8],  // The vault PDA address (32 bytes)
     amount:u64,
     prev_utxo_hash_bytes:&[u8],
     epoch:u32,
@@ -265,8 +266,15 @@ pub fn prepare_output(
         return Err("Invalid Pubkey Size".into());
     }
 
+    if receiver_vault_pda.len() != 32 {
+        return Err("Invalid Vault PDA Size (expected 32 bytes)".into());
+    }
+
     let mut pubkey_arr = [0u8; KYBER_PUBKEY_SIZE];
     pubkey_arr.copy_from_slice(receiver_pubkey_bytes);
+
+    let mut vault_pda_arr = [0u8; 32];
+    vault_pda_arr.copy_from_slice(receiver_vault_pda);
 
     // Kyber Encapsulate
     let mut rng = OsRng;
@@ -275,19 +283,13 @@ pub fn prepare_output(
         Err(_) => return Err("Encapsulation Failed".into()),
     };
 
-    // Hash Kyber Pubkey to get Receiver Vault (32 bytes)
-    // This matches guest `hash_pubkey` logic
-    let mut hasher = Sha256::new();
-    hasher.update(receiver_pubkey_bytes);
-    let receiver_vault: [u8; 32] = hasher.finalize().into();
-
     let mut payload_randomness = [0u8; 32];
     rng.try_fill_bytes(&mut payload_randomness).expect("RNG Error");
 
     let payload = UTXOEncryptedPayload {
         amount,
         is_return,
-        receiver_vault,
+        receiver_vault: vault_pda_arr,
         randomness: payload_randomness,
         utxo_spent_list: vec![], // TODO: Add history 
         version: 1,
@@ -324,7 +326,7 @@ pub fn prepare_output(
         encrypted_payload,
         
         randomness: payload_randomness.to_vec(),
-        receiver_vault: receiver_vault.to_vec(),
+        receiver_vault: vault_pda_arr.to_vec(),
         is_return,
     };
 

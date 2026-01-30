@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use solana_sha256_hasher::hash;
 use crate::constants::*;
 use crate::error::ErrorCode;
 use crate::events::AirdropCompleted;
@@ -9,6 +8,8 @@ use crate::state::{Utxo, Ledger, Loader};
 /// This is used by the faucet to distribute tokens without going through
 /// the full ZK proof and attestation flow.
 /// Security Note: This bypasses proof verification and immediately finalizes.
+/// The ciphertext_commitment must be pre-calculated by the faucet to match
+/// the prover's verification logic (hash of plaintext payload fields).
 #[derive(Accounts)]
 #[instruction(utxo_hash: [u8; 32], encrypted_payload: Vec<u8>)]
 pub struct Airdrop<'info> {
@@ -49,6 +50,7 @@ pub fn airdrop(
     utxo_hash: [u8; 32],
     encrypted_payload: Vec<u8>,
     nonce: [u8; NONCE_SIZE],
+    ciphertext_commitment: [u8; 32],
     epoch: u32,
 ) -> Result<()> {
     let ledger = &mut ctx.accounts.ledger;
@@ -65,19 +67,9 @@ pub fn airdrop(
         ErrorCode::PayloadTooLarge
     );
 
-    // Calculate ciphertext commitment on heap
-    let commitment_data = {
-        let mut data = Vec::with_capacity(
-            KYBER_CIPHERTEXT_SIZE + NONCE_SIZE + encrypted_payload.len()
-        );
-        data.extend_from_slice(&loader.ciphertext);
-        data.extend_from_slice(&nonce);
-        data.extend_from_slice(&encrypted_payload);
-        data
-    };
-    let ciphertext_commitment = hash(&commitment_data).to_bytes();
-
     // Initialize UTXO without voting (airdrop flow)
+    // Note: ciphertext_commitment is provided by the faucet and should be
+    // the hash of the plaintext payload fields to match prover verification
     utxo.initialize_airdrop(
         epoch,
         utxo_hash,

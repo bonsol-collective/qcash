@@ -30,9 +30,6 @@
         },
         {
           "name": "ledger",
-          "docs": [
-            "Ledger account - will be updated with new tip"
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -107,6 +104,15 @@
             "array": [
               "u8",
               12
+            ]
+          }
+        },
+        {
+          "name": "ciphertext_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
             ]
           }
         },
