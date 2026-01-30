@@ -262,6 +262,15 @@ export type SolanaPrograms = {
           }
         },
         {
+          "name": "ciphertextCommitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
           "name": "epoch",
           "type": "u32"
         }

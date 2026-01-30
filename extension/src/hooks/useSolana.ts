@@ -28,13 +28,39 @@ export class InsufficientFundsError extends Error {
 const connection = new Connection(NETWORK, "confirmed");
 
 export const useSolana = () => {
-  const wallet = useWallet();
+  const { wallet } = useWallet();
   const { getSolanaSecret, isReady: wasmReady } = useWasm();
 
   const getProvider = async (): Promise<AnchorProvider> => {
-    const provider = new AnchorProvider(connection, {} as any, {
-      preflightCommitment: "confirmed",
-    })
+    if (!wallet?.mnemonic) {
+      throw new Error("Wallet not connected");
+    }
+    if (!wasmReady) {
+      throw new Error("WASM not initialized");
+    }
+
+    // Get keypair from wallet mnemonic
+    const secretBytes = getSolanaSecret(wallet.mnemonic);
+    const payer = Keypair.fromSecretKey(secretBytes);
+
+    // Create provider with proper wallet that can sign transactions
+    const provider = new AnchorProvider(connection, {
+      publicKey: payer.publicKey,
+      signTransaction: async <T extends web3.Transaction | web3.VersionedTransaction>(tx: T): Promise<T> => {
+        if (tx instanceof web3.Transaction) {
+          tx.sign(payer);
+        }
+        return tx;
+      },
+      signAllTransactions: async <T extends web3.Transaction | web3.VersionedTransaction>(txs: T[]): Promise<T[]> => {
+        txs.forEach((tx) => {
+          if (tx instanceof web3.Transaction) {
+            tx.sign(payer);
+          }
+        });
+        return txs;
+      },
+    }, { preflightCommitment: "confirmed" });
 
     return provider;
   }
@@ -47,21 +73,21 @@ export const useSolana = () => {
 
   const getSolBalance = async () => {
 
-    if (!wallet?.wallet?.solana_address) {
+    if (!wallet?.solana_address) {
       throw new Error("Solana Address not found");
     }
 
-    const balance = await connection.getBalance(new PublicKey(wallet?.wallet?.solana_address));
+    const balance = await connection.getBalance(new PublicKey(wallet?.solana_address));
     return balance;
   }
 
   const deriveVaultPDA = async () => {
 
-    if (!wallet?.wallet?.kyber_pubkey) {
+    if (!wallet?.kyber_pubkey) {
       throw new Error("Kyber key not found");
     }
 
-    const kyberKeyBytes = utils.bytes.bs58.decode(wallet.wallet.kyber_pubkey);
+    const kyberKeyBytes = utils.bytes.bs58.decode(wallet.kyber_pubkey);
 
     const hash = await crypto.subtle.digest("SHA-256", new Uint8Array(kyberKeyBytes));
     const hashArray = Array.from(new Uint8Array(hash));
@@ -96,7 +122,7 @@ export const useSolana = () => {
   }
 
   const registerVault = async () => {
-    if (!wallet || !wallet.wallet) {
+    if (!wallet) {
       throw new Error("Wallet not connected");
     }
 
@@ -113,13 +139,13 @@ export const useSolana = () => {
     // );
     // await connection.confirmTransaction(airDropSig);
 
-    const secretBytes = getSolanaSecret(wallet.wallet?.mnemonic);
+    const secretBytes = getSolanaSecret(wallet.mnemonic);
 
     // Recontructing the keypair
     const payer = Keypair.fromSecretKey(secretBytes);
     console.log("Payer Public Key:", payer.publicKey.toString());
 
-    if (payer.publicKey.toString() != wallet.wallet.solana_address) {
+    if (payer.publicKey.toString() != wallet.solana_address) {
       throw new Error("Derived key does not match Wallet Address! Derivation mismatch.");
     }
 
@@ -158,13 +184,13 @@ export const useSolana = () => {
       }),
     );
 
-    if (!wallet.wallet?.kyber_pubkey) {
+    if (!wallet.kyber_pubkey) {
       throw new Error("Kyber key not found");
     }
 
     // convert kyber key to buffer(Vec<u8>)
     const kyberBytes = utils.bytes.bs58.decode(
-      wallet.wallet?.kyber_pubkey,
+      wallet.kyber_pubkey,
     );
 
     const hashBuffer = await crypto.subtle.digest("SHA-256", new Uint8Array(kyberBytes));

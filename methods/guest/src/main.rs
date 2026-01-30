@@ -123,8 +123,6 @@ fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
     hasher.finalize().into()
 }
 
-
-
 fn create_header(payload: &UTXOEncryptedPayload, prev_hash: HASH, epoch: u32) -> UTXOCommitmentHeader {
    let c_commitment = hash_payload(payload);
     let mut hasher = Sha256::<Impl>::new();
