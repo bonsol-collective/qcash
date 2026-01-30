@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use solana_sha256_hasher::hash;
 use crate::constants::*;
 use crate::error::ErrorCode;
 use crate::events::UtxoCreated;
@@ -49,6 +48,7 @@ pub fn create_utxo(
     utxo_hash: [u8; 32],
     encrypted_payload: Vec<u8>,
     nonce: [u8; NONCE_SIZE],
+    ciphertext_commitment: [u8; 32],
     epoch: u32,
 ) -> Result<()> {
     let ledger = &ctx.accounts.ledger;
@@ -64,18 +64,6 @@ pub fn create_utxo(
         encrypted_payload.len() <= MAX_PAYLOAD_SIZE,
         ErrorCode::PayloadTooLarge
     );
-
-    // Calculate ciphertext commitment on heap
-    let commitment_data = {
-        let mut data = Vec::with_capacity(
-            KYBER_CIPHERTEXT_SIZE + NONCE_SIZE + encrypted_payload.len()
-        );
-        data.extend_from_slice(&loader.ciphertext);
-        data.extend_from_slice(&nonce);
-        data.extend_from_slice(&encrypted_payload);
-        data
-    };
-    let ciphertext_commitment = hash(&commitment_data).to_bytes();
 
     // Initialize UTXO
     utxo.initialize(

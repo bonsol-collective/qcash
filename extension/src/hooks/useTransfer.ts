@@ -388,6 +388,7 @@ export const useTransfer = () => {
                 Array.from(utxoHash),
                 Buffer.from(new Uint8Array(output.encrypted_payload)),
                 Array.from(new Uint8Array(output.nonce)),
+                Array.from(new Uint8Array(output.ciphertext_commitment)),
                 output.epoch
             )
             .accounts({

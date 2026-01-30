@@ -73,9 +73,10 @@ pub mod solana_programs {
         utxo_hash: [u8; 32],
         encrypted_payload: Vec<u8>,
         nonce: [u8; 12],
+        ciphertext_commitment: [u8; 32],
         epoch: u32,
     ) -> Result<()> {
-        create_utxo::create_utxo(ctx, utxo_hash, encrypted_payload, nonce, epoch)
+        create_utxo::create_utxo(ctx, utxo_hash, encrypted_payload, nonce, ciphertext_commitment, epoch)
     }
 
     /// Register a new prover (admin only)
