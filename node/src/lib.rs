@@ -4,6 +4,7 @@ use anyhow::{Error, Result, anyhow};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use futures::{StreamExt, stream};
 use interface::PROGRAM_ID;
+use qcash::QcashEvent;
 use sha3::{Digest, Keccak256};
 use solana_client::rpc_config::{
     CommitmentConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
@@ -162,7 +163,7 @@ impl QcashNode {
         })
     }
 
-    pub fn start(&self, tx_chan: mpsc::UnboundedSender<Vec<u8>>) {
+    pub fn start(&self) {
         let websocket_url = self.websocket_url.clone();
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
 
@@ -183,16 +184,23 @@ impl QcashNode {
 
     async fn process_event(event: Vec<u8>) {
         // Parse the event object and process ZkProofChunkWritten messages
-        match qcash_events::QcashEvent::parse(&event) {
-            Ok(qcash_events::QcashEvent::ZkProofChunkWritten(chunk_event)) => {
+        match QcashEvent::parse(&event) {
+            Ok(QcashEvent::ZkProofChunkWritten(chunk_event)) => {
                 info!(
                     "ZK Proof chunk written: {} bytes at offset {}, total length: {}",
                     chunk_event.new_bytes_written, chunk_event.offset, chunk_event.total_length
                 );
-                
+
                 // Verify that the number of bytes uploaded matches the total
                 if chunk_event.offset + chunk_event.new_bytes_written == chunk_event.total_length {
-                    info!("ZK Proof upload complete! Total bytes: {}", chunk_event.total_length);
+                    info!(
+                        "ZK Proof upload complete! Total bytes: {}",
+                        chunk_event.total_length
+                    );
+
+                    // implement download proof, it takes one parameter, a Pubkey, which is the address of the solana account where the data is stored, it'll download and parse it using bincode, returing a risc0 Receipt. AI!
+                    let proof = download_proof(&chunk_event.zk_proof).await?;
+                    verify_proof(&proof);
                 } else {
                     info!(
                         "ZK Proof upload in progress: {}/{} bytes",
@@ -201,13 +209,13 @@ impl QcashNode {
                     );
                 }
             }
-            Ok(qcash_events::QcashEvent::UtxoCreated(utxo_event)) => {
+            Ok(QcashEvent::UtxoCreated(utxo_event)) => {
                 info!(
                     "UTXO created: {:?}, epoch: {}",
                     utxo_event.utxo_hash, utxo_event.epoch
                 );
             }
-            Ok(qcash_events::QcashEvent::VaultCompleted(vault_event)) => {
+            Ok(QcashEvent::VaultCompleted(vault_event)) => {
                 info!(
                     "Vault completed for key hash: {:?}, total length: {}",
                     vault_event.key_hash, vault_event.total_length
