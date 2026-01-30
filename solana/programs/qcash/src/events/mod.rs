@@ -2,7 +2,12 @@
 //!
 //! This module defines the various events emitted by the qcash program during its operations.
 
+<<<<<<< HEAD
 pub mod airdrop_completed;
+=======
+use anchor_lang::{AnchorDeserialize, Discriminator, Result};
+
+>>>>>>> 89cf238 (feat: add event parsing functionality to QcashEvent enum)
 pub mod attestation_submitted;
 pub mod ledger_initialized;
 pub mod loader_chunk_written;
@@ -44,4 +49,21 @@ pub enum QcashEvent {
     VaultInitialized(VaultInitialized),
     ZkProofChunkWritten(ZkProofChunkWritten),
     ZkProofInitialized(ZkProofInitialized),
+}
+
+impl QcashEvent {
+    /// Parse raw event data into a QssnEvent enum
+    pub fn parse(data: &[u8]) -> Result<Self> {
+        // Extract discriminator (first 8 bytes)
+        let discriminator = &data[..8];
+
+        // Parse based on discriminator using match
+        match discriminator {
+            AttestationSubmitted::DISCRIMINATOR => {
+                let event = AttestationSubmitted::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::AttestationSubmitted(event))
+            }
+            _ => todo!(), //Impelement  all eventos. AI!
+        }
+    }
 }
