@@ -1,16 +1,18 @@
-use std::{path::Path, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use anyhow::{Error, Result, anyhow};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use futures::{StreamExt, stream};
 use interface::PROGRAM_ID;
 use qcash::QcashEvent;
+use risc0_zkvm::Receipt;
 use sha3::{Digest, Keccak256};
-use solana_client::rpc_config::{
-    CommitmentConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+use solana_client::{
+    nonblocking::rpc_client::RpcClient,
+    rpc_config::{CommitmentConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter},
 };
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
-use solana_sdk::{signature::Keypair, signer::Signer, pubkey::Pubkey};
+use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
@@ -134,6 +136,7 @@ impl SolanaKeyManager {
     }
 }
 
+//add rpc_url. AI!
 pub struct QcashNodeConfig {
     pub previous_key_file: String,
     pub current_key_file: String,
@@ -176,13 +179,14 @@ impl QcashNode {
 
         // Spawn the event processing thread
         tokio::spawn(async move {
+            let rpc_client = RpcClient::new(self.rpc_url);
             while let Some(event) = rx.recv().await {
-                Self::process_event(event).await;
+                Self::process_event(event, &rpc_client).await;
             }
         });
     }
 
-    async fn process_event(event: Vec<u8>) {
+    async fn process_event(event: Vec<u8>, rpc_client: &RpcClient) {
         // Parse the event object and process ZkProofChunkWritten messages
         match QcashEvent::parse(&event) {
             Ok(QcashEvent::ZkProofChunkWritten(chunk_event)) => {
@@ -198,7 +202,7 @@ impl QcashNode {
                         chunk_event.total_length
                     );
 
-                    let proof = download_proof(&chunk_event.zk_proof).await;
+                    let proof = download_proof(&chunk_event.zk_proof, rpc_client).await;
                     match proof {
                         Ok(p) => verify_proof(&p),
                         Err(e) => info!("Failed to download proof: {}", e),
@@ -233,17 +237,12 @@ impl QcashNode {
     }
 }
 
-async fn download_proof(proof_account: &Pubkey) -> Result<Vec<u8>> {
-    // Placeholder implementation
-    // In a real scenario, this would connect to a Solana client,
-    // fetch the account data at `proof_account`, and parse it.
-    // For now, we return an empty vector to satisfy the signature.
-    Ok(vec
-![])
+async fn download_proof(proof_account: &Pubkey, rpc_client: &RpcClient) -> Result<Receipt> {
+    let registry_data = rpc_client.get_account_data(proof_account).await?;
+    Ok(bincode::deserialize(&registry_data)?)
 }
 
-fn verify_proof(proof: &[u8])
- {
+fn verify_proof(proof: &[u8]) {
     // Placeholder implementation
     // In a real scenario, this would verify the risc0 Receipt.
     info!("Verifying proof of length: {}", proof.len());
