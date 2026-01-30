@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 use anyhow::{Error, Result, anyhow};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use futures::{StreamExt, stream};
-use interface::{PROGRAM_ID, accounts, instructions, submit_attestation};
+use interface::{accounts, instructions, submit_attestation, PROGRAM_ID};
 use qcash::QcashEvent;
 use risc0_zkvm::Receipt;
 use sha3::{Digest, Keccak256};
@@ -17,7 +17,6 @@ use solana_sdk::{
     commitment_config::CommitmentConfig, message::Message, signature::Keypair, signer::Signer,
     transaction::Transaction,
 };
-//use solana_sdk::{signature::Keypair, signer::Signer};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
@@ -188,15 +187,16 @@ impl QcashNode {
 
         // Spawn the event processing thread
         let rpc_url = self.rpc_url.clone();
+        let key_manager = self.key_manager.clone();
         tokio::spawn(async move {
             let rpc_client = RpcClient::new(rpc_url);
             while let Some(event) = rx.recv().await {
-                Self::process_event(event, &rpc_client).await;
+                Self::process_event(event, &rpc_client, &key_manager).await;
             }
         });
     }
 
-    async fn process_event(&self, event: Vec<u8>, rpc_client: &RpcClient) {
+    async fn process_event(event: Vec<u8>, rpc_client: &RpcClient, key_manager: &SolanaKeyManager) {
         // Parse the event object and process ZkProofChunkWritten messages
         match QcashEvent::parse(&event) {
             Ok(QcashEvent::ZkProofChunkWritten(chunk_event)) => {
@@ -211,8 +211,14 @@ impl QcashNode {
                         "ZK Proof upload complete! Total bytes: {}",
                         chunk_event.total_length
                     );
-                    self.process_verify_proof(&chunk_event.zk_proof, rpc_client)
-                        .await;
+                    process_verify_proof(
+                        &chunk_event.zk_proof,
+                        key_manager.current_key(),
+                        key_manager.previous_key(),
+                        &chunk_event.zk_proof,
+                        rpc_client,
+                    )
+                    .await;
                 } else {
                     info!(
                         "ZK Proof upload in progress: {}/{} bytes",
@@ -241,43 +247,74 @@ impl QcashNode {
             }
         }
     }
-    async fn process_verify_proof(
-        &self,
-        proof_account: &Pubkey,
-        current_key: &Keypair,
-        previous_key: &Keypair,
-        utxo: &Pubkey,
-        rpc_client: &RpcClient,
-    ) {
-        let proof_result = rpc_client.get_account_data(proof_account).await;
-        match proof_result {
-            Ok(data) => {
-                let receipt_result: Result<Receipt> =
-                    bincode::deserialize(&data).map_err(|e| e.into());
+}
 
-                match receipt_result {
-                    Ok(receipt) => {
-                        if let Err(e) = receipt.verify(IMAGE_ID) {
-                            info!("Proof verification failed: {}", e);
-                            create_submit_attestation_transaction(); //true vote
-                        } else {
-                            info!("Proof verified successfully!");
-                            create_submit_attestation_transaction(); //false vote
-                        }
+async fn process_verify_proof(
+    proof_account: &Pubkey,
+    current_key: &Keypair,
+    previous_key: &Keypair,
+    utxo: &Pubkey,
+    rpc_client: &RpcClient,
+) {
+    let proof_result = rpc_client.get_account_data(proof_account).await;
+    match proof_result {
+        Ok(data) => {
+            let receipt_result: Result<Receipt> =
+                bincode::deserialize(&data).map_err(|e| e.into());
+
+            match receipt_result {
+                Ok(receipt) => {
+                    if let Err(e) = receipt.verify(IMAGE_ID) {
+                        info!("Proof verification failed: {}", e);
+                        let _ = create_submit_attestation_transaction(
+                            current_key,
+                            previous_key,
+                            utxo,
+                            rpc_client,
+                            true,
+                        )
+                        .await;
+                    } else {
+                        info!("Proof verified successfully!");
+                        let _ = create_submit_attestation_transaction(
+                            current_key,
+                            previous_key,
+                            utxo,
+                            rpc_client,
+                            false,
+                        )
+                        .await;
                     }
-                    Err(e) => info!("Failed to deserialize proof: {}", e),
                 }
+                Err(e) => info!("Failed to deserialize proof: {}", e),
             }
-            Err(e) => info!("Failed to download proof: {}", e),
         }
+        Err(e) => info!("Failed to download proof: {}", e),
     }
 }
 
-//complete this function,add the missing parameters and make sure its called from above. AI!
-fn create_submit_attestation_transaction() {
+async fn create_submit_attestation_transaction(
+    current_key: &Keypair,
+    previous_key: &Keypair,
+    utxo: &Pubkey,
+    rpc_client: &RpcClient,
+    vote: bool,
+) -> Result<Vec<u8>> {
     let (prover_registry_pda, _bump) =
         accounts::SubmitAttestation::prover_registry_pda(&PROGRAM_ID);
     let (ledger_pda, _bump) = accounts::SubmitAttestation::ledger_pda(&PROGRAM_ID);
+
+    let next_key_hash = {
+        let mut hasher = Keccak256::new();
+        hasher.update(current_key.pubkey().as_ref());
+        hasher.finalize().to_vec()
+    };
+
+    let utxo_hash = {
+        let mut hasher = Keccak256::new();
+        hasher.update(utxo.as_ref());
+        hasher.finalize().to_vec()
+    };
 
     let ix = submit_attestation(
         &PROGRAM_ID,
@@ -296,8 +333,10 @@ fn create_submit_attestation_transaction() {
         },
     );
 
+    let recent_blockhash = rpc_client.get_latest_blockhash().await?;
+
     // Create a message with the instruction
-    let message = Message::new(&[attestation_instruction], Some(&previous_key.pubkey()));
+    let message = Message::new(&[ix], Some(&previous_key.pubkey()));
 
     // Create the transaction
     let mut transaction = Transaction::new_unsigned(message);
