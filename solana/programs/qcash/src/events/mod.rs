@@ -5,7 +5,6 @@
 pub mod airdrop_completed;
 use anchor_lang::prelude::*;
 
->>>>>>> 89cf238 (feat: add event parsing functionality to QcashEvent enum)
 pub mod attestation_submitted;
 pub mod ledger_initialized;
 pub mod loader_chunk_written;
@@ -20,7 +19,6 @@ pub mod zk_proof_chunk_written;
 pub mod zk_proof_initialized;
 
 pub use airdrop_completed::*;
-pub use attestation_submitted::*;
 pub use attestation_submitted::*;
 pub use ledger_initialized::*;
 pub use loader_chunk_written::*;
