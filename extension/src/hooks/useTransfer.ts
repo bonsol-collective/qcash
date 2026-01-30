@@ -1,9 +1,12 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Keypair } from "@solana/web3.js";
 import { useSolana } from "./useSolana";
 import { useLedgerSync } from "./useLedgerSync";
 import { useCallback, useState } from "react";
 import { useKeyManager } from "./useKeyManager.ts";
+import { useWasm } from "./useWasm";
+import { useWallet } from "../context/WalletContext";
 import * as wasm from '../wasm/qcash_wasm';
+import { Buffer } from "buffer";
 
 const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
 
@@ -11,6 +14,8 @@ export const useTransfer = () => {
     const { connection, getProgram } = useSolana();
     const { utxos, syncNow: scanLedger } = useLedgerSync();
     const { keys } = useKeyManager();
+    const { getSolanaSecret, isReady: wasmReady } = useWasm();
+    const { wallet } = useWallet();
 
     const [status, setStatus] = useState<"idle" | "preparing" | "proving" | "encrypting" | "ready" | "submitting" | "success" | "error">("idle");
     const [receiverKey, setReceiverKey] = useState<Uint8Array | null>(null);
@@ -209,7 +214,7 @@ export const useTransfer = () => {
 
 
             return new Promise((res, rej) => {
-                chrome.runtime.sendMessage({ type: "SEND_TO_DAEMON", payload: nativeRequest }, (response) => {
+                chrome.runtime.sendMessage({ type: "SEND_TO_DAEMON", payload: nativeRequest }, async (response) => {
                     if (chrome.runtime.lastError) {
                         console.error("Messaging Error:", chrome.runtime.lastError);
                         setStatus("error");
@@ -228,9 +233,15 @@ export const useTransfer = () => {
                         console.log(`Proof generated in ${proving_time_secs}s`);
                         console.log("Proof generated", proof);
 
-                        setStatus("success");
-                        // submitToSolana(proof, receiverOutput, returnOutput);
-                        res(response.data);
+                        try {
+                            // Submit to Solana
+                            await submitToSolana(proof, receiverOutput, returnOutput);
+                            res(response.data);
+                        } catch (submitErr) {
+                            console.error("Submission failed:", submitErr);
+                            setStatus("error");
+                            rej(submitErr);
+                        }
                     } else {
                         const errorMsg = response.data?.msg || response.msg || "Unknown daemon error";
                         console.error("Daemon Error:", errorMsg);
@@ -250,55 +261,147 @@ export const useTransfer = () => {
 
     }
 
-    // const submitToSolana = async (proof: string, receiverOutput: any, returnOutput: any) => {
-    //     setStatus("submitting");
 
-    //     try {
-    //         const program = await getProgram();
+    const submitToSolana = async (proof: string, receiverOutput: any, returnOutput: any) => {
+        setStatus("submitting");
 
-    //         // convert base64 Proof to Buffer
-    //         const proofBytes = Buffer.from(proof, "base64");
+        try {
+            const program = await getProgram();
 
-    //         const [ledgerPda] = PublicKey.findProgramAddressSync(
-    //             [new TextEncoder().encode("ledger")],
-    //             program.programId
-    //         );
+            if (!keys || !wallet?.mnemonic) {
+                throw new Error("Keys or wallet not loaded");
+            }
 
-    //         // formatting them for Anchor.
-    //         const receiverUTXO = {
-    //             utxoHash: Array.from(receiverOutput.utxo_hash),
-    //             prevUtxoHash: Array.from(receiverOutput.prev_utxo_hash),
-    //             ciphertextCommitment: Array.from(receiverOutput.commitment),
-    //             epoch: receiverOutput.epoch,
-    //             kyberCiphertext: Array.from(receiverOutput.kyber_ciphertext),
-    //             nonce: Array.from(receiverOutput.nonce),
-    //             encryptedPayload: Array.from(receiverOutput.encrypted_payload)
-    //         };
+            if (!wasmReady) {
+                throw new Error("WASM not initialized");
+            }
 
-    //         const returnUTXO = {
-    //             utxoHash: Array.from(returnOutput.utxo_hash),
-    //             prevUtxoHash: Array.from(returnOutput.prev_utxo_hash),
-    //             ciphertextCommitment: Array.from(returnOutput.commitment),
-    //             epoch: returnOutput.epoch,
-    //             kyberCiphertext: Array.from(returnOutput.kyber_ciphertext),
-    //             nonce: Array.from(returnOutput.nonce),
-    //             encryptedPayload: Array.from(returnOutput.encrypted_payload)
-    //         };
+            // Get the payer keypair from WASM
+            const payerSecret = getSolanaSecret(wallet.mnemonic);
+            const payer = Keypair.fromSecretKey(new Uint8Array(payerSecret));
 
-    //         console.log("Submitting transaction to Solana...");
+            // Convert base64 proof to Uint8Array
+            const proofBytes = Uint8Array.from(atob(proof), c => c.charCodeAt(0));
+            console.log(`Proof size: ${proofBytes.length} bytes`);
 
-    //         setStatus("success");
+            console.log("Uploading ZK Proof");
+            const zkProofKeypair = Keypair.generate();
 
-    //         scanLedger();
+            // Init ZK proof account
+            await program.methods
+                .initZkProof(proofBytes.length)
+                .accounts({
+                    signer: payer.publicKey,
+                    zkProof: zkProofKeypair.publicKey,
+                })
+                .signers([payer, zkProofKeypair])
+                .rpc();
 
-    //     } catch (err) {
-    //         console.error("Submission failed:", err);
-    //         setStatus("error");
-    //         throw err;
-    //     }
+            // Write proof in chunks (max 900 bytes per tx to stay under limit)
+            const CHUNK_SIZE = 900;
+            for (let offset = 0; offset < proofBytes.length; offset += CHUNK_SIZE) {
+                const chunk = proofBytes.slice(offset, Math.min(offset + CHUNK_SIZE, proofBytes.length));
 
-    //     setStatus("success");
-    // };
+                await program.methods
+                    .writeZkProof(offset, Buffer.from(chunk))
+                    .accounts({
+                        zkProof: zkProofKeypair.publicKey,
+                    })
+                    .rpc();
+
+                console.log(`Uploaded proof chunk ${offset}/${proofBytes.length}`);
+            }
+
+            console.log("ZK Proof uploaded:", zkProofKeypair.publicKey.toString());
+
+            // Creating Receiver UTXO 
+            await createUtxo(program, payer, receiverOutput, zkProofKeypair.publicKey);
+
+            // Creating Return UTXO 
+            await createUtxo(program, payer, returnOutput, zkProofKeypair.publicKey);
+
+            console.log("Transaction submitted successfully!");
+            setStatus("success");
+
+            // Refresh ledger
+            scanLedger();
+
+        } catch (err) {
+            console.error("Submission failed:", err);
+            setStatus("error");
+            throw err;
+        }
+    };
+
+    // Helper to create a single UTXO (handles ciphertext upload + UTXO creation)
+    const createUtxo = async (
+        program: any,
+        payer: any,
+        output: any,
+        zkProofPubkey: PublicKey
+    ) => {
+        // Init Loader for ciphertext
+        const loaderKeypair = Keypair.generate();
+
+        await program.methods
+            .initLoader()
+            .accounts({
+                signer: payer.publicKey,
+                loader: loaderKeypair.publicKey,
+            })
+            .signers([payer, loaderKeypair])
+            .rpc();
+
+        // Write ciphertext in chunks
+        const ciphertext = new Uint8Array(output.kyber_ciphertext);
+        const CHUNK_SIZE = 900;
+
+        for (let offset = 0; offset < ciphertext.length; offset += CHUNK_SIZE) {
+            const chunk = ciphertext.slice(offset, Math.min(offset + CHUNK_SIZE, ciphertext.length));
+
+            await program.methods
+                .writeLoader(offset, Buffer.from(chunk))
+                .accounts({
+                    loader: loaderKeypair.publicKey,
+                })
+                .rpc();
+        }
+
+        console.log("Ciphertext uploaded");
+
+        // Derive ledger PDA
+        const [ledgerPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("ledger")],
+            PROGRAM_ID
+        );
+
+        // Derive UTXO PDA
+        const utxoHash = new Uint8Array(output.utxo_hash);
+        const [utxoPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("utxo"), utxoHash],
+            PROGRAM_ID
+        );
+
+        // Create UTXO
+        await program.methods
+            .createUtxo(
+                Array.from(utxoHash),
+                Buffer.from(new Uint8Array(output.encrypted_payload)),
+                Array.from(new Uint8Array(output.nonce)),
+                output.epoch
+            )
+            .accounts({
+                signer: payer.publicKey,
+                ledger: ledgerPda,
+                utxo: utxoPda,
+                loader: loaderKeypair.publicKey,
+                zkProof: zkProofPubkey,
+            })
+            .signers([payer])
+            .rpc();
+
+        console.log("UTXO created:", utxoPda.toString());
+    };
 
 
     return { prepareTransaction, status, receiverKey, utxos, executeSend }
