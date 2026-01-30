@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import init, { try_decrypt_utxo } from "./wasm/qcash_wasm";
 import * as anchor from "@coral-xyz/anchor";
@@ -7,6 +8,8 @@ import type { SolanaPrograms } from "./idl/solana_programs.ts";
 // @ts-ignore - Vite provides this at build time
 import wasmUrl from "./wasm/qcash_wasm_bg.wasm?url";
 
+// Make Buffer available globally for Anchor (which expects Node.js Buffer)
+(globalThis as any).Buffer = Buffer;
 const RPC_URL = import.meta.env.VITE_RPC_URL;
 const HASH_SIZE = 32;
 
@@ -59,9 +62,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             // forward the payload to the Rust daemon
             port.postMessage(msg.payload);
 
-            // Listen for Daemon Process
+            // Listen for Daemon responses (may receive multiple progress updates)
             port.onMessage.addListener((response) => {
                 console.log("Background: Received from Daemon:", response);
+
+                // Handle progress messages (keep-alive heartbeats)
+                if (response.status === "progress") {
+                    console.log("Background: Proof in progress:", response.data?.msg);
+                    // Don't disconnect - more messages coming
+                    return;
+                }
+
                 sendResponse(response);
                 port.disconnect();
             })

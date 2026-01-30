@@ -161,8 +161,8 @@ export const useTransfer = () => {
 
             // Proof inputs 
             const proofInputs = {
-                // Have to provide the secret key 
-                sender_private_key_fragment: Array.from(keys.seed),
+                // Pass pre-derived Kyber pubkey to avoid expensive key derivation in ZK circuit
+                sender_kyber_pubkey: Array.from(keys.kyberPublicKey),
                 input_utxos: inputs.map(u => ({
                     header: {
                         utxo_hash: u.header.utxoHash,

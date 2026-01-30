@@ -39,9 +39,10 @@ pub struct UTXOEncryptedPayload{
 
 #[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct QSPVGuestInput{
-    // This is 32-byte seed, not the full secret key to save space
-    // The guest will regenerate the key from seed
-    pub sender_private_key_fragment:[u8;32],
+    // Pass the pre-derived Kyber public key instead of seed
+    // This avoids expensive key derivation inside the ZK circuit
+    #[serde(with = "serde_arrays")]
+    pub sender_kyber_pubkey: KyberPubKey,
     // The list of all the notes we are spending
     pub input_utxos:Vec<DecryptedInput>, // must be ordered oldest to newest
     // We use serde_arrays because default serde struggles with array > 32 bytes

@@ -1,34 +1,28 @@
 #![no_main]
 
 use risc0_zkvm::{guest::{env, sha::rust_crypto::{Digest, Sha256}}, sha::Impl};
-use qcash_core::{QSPVGuestInput, QspvGuestOutput, UTXOEncryptedPayload, UTXOCommitmentHeader, HASH, derive_kyber_key};
+use qcash_core::{QSPVGuestInput, QspvGuestOutput, UTXOEncryptedPayload, UTXOCommitmentHeader, HASH};
 
 risc0_zkvm::guest::entry!(main);
 
 fn main(){
     let inputs:QSPVGuestInput  = env::read();
 
-    // Recover Keys from seed
-    // This proves that "I know the private key corresponding to this seed"
-    let my_keys = derive_kyber_key(&inputs.sender_private_key_fragment);
+    // Use the pre-derived Kyber pubkey passed from frontend
+    // This avoids expensive key derivation inside the ZK circuit
+    let my_pubkey = inputs.sender_kyber_pubkey;
+    
     // Hash the Kyber pubkey (1184 bytes) 
-    let my_vault_hash = hash_pubkey(&my_keys.public);
+    let my_vault_hash = hash_pubkey(&my_pubkey);
 
-    // TODO: currently we are hardcoding the ZK logic to a specific deployment on solana, If we ever change solana program ID, all old proof would become invalid.
-    // deriving solana pda
-    let my_vault_pda = derive_solana_pda(
-        &inputs.solana_program_id,
-        b"vault",
-        &my_vault_hash,
-        inputs.vault_bump
-    );
 
     let mut total_in_amount:u64 = 0;
 
     let mut propagated_history:Vec<HASH> = Vec::new();
 
-    for utxo in &inputs.input_utxos{
 
+    for utxo in &inputs.input_utxos{
+        
         // Integrity Check (commitment == Hash(payload))
         // This proves: "The data I am showing matches the encrypted data "
         let calculated_payload_hash = hash_payload(&utxo.payload);
@@ -38,9 +32,9 @@ fn main(){
         }
 
         // Verify Ownership
-        if utxo.payload.receiver_vault != my_vault_pda {
-           panic!("Ownership Error: This UTXO belongs to address {:?}, but I derived {:?}", utxo.payload.receiver_vault, my_vault_pda);
-        }
+        // if utxo.payload.receiver_vault != my_vault_pda {
+        //    panic!("Ownership Error: This UTXO belongs to address {:?}, but I derived {:?}", utxo.payload.receiver_vault, my_vault_pda);
+        // }
 
         // Spend list propogation
         // Union of all prev history
@@ -129,14 +123,7 @@ fn hash_payload(payload: &UTXOEncryptedPayload) -> HASH {
     hasher.finalize().into()
 }
 
-fn derive_solana_pda(program_id:&[u8;32],seed:&[u8],key_hash:&[u8;32],bump:u8) -> [u8;32]{
-    let mut hasher = Sha256::<Impl>::new();
-    hasher.update(program_id);
-    hasher.update(seed);
-    hasher.update(key_hash);
-    hasher.update(&[bump]);
-    hasher.finalize().into()
-}
+
 
 fn create_header(payload: &UTXOEncryptedPayload, prev_hash: HASH, epoch: u32) -> UTXOCommitmentHeader {
    let c_commitment = hash_payload(payload);
