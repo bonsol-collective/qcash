@@ -183,6 +183,7 @@ impl QcashNode {
 
     async fn process_event(event: Vec<u8>) {
         // Stub: Parse and process the event
+        // parse the event object (as defined in solana/programs/qcash) and process the a ZkProofChunkWritten message, and make sure the number of bytes uploaded matches the total. AI!
         info!("Processing event: {:?}", event);
         // TODO: Implement actual parsing and processing logic
     }
