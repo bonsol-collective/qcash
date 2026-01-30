@@ -222,9 +222,18 @@ impl QcashNode {
             None => format!("{}.previous", current_key_file),
         };
 
-        // dont generate keys if the keys exist, even if generate_keys is set, and load them instead (just print a warning that ur not generating the keys). AI!
+        // Check if keys exist before generating new ones
+        let keys_exist = Path::new(&current_key_file).exists()
+            && Path::new(&next_key_file).exists()
+            && Path::new(&previous_key_file).exists();
+
         let key_manager = if config.generate_keys {
-            SolanaKeyManager::new_with_new_keys(current_key_file, next_key_file, previous_key_file)?
+            if keys_exist {
+                warn!("generate_keys is set to true, but keys already exist. Loading existing keys instead of generating new ones.");
+                SolanaKeyManager::new(current_key_file, next_key_file, previous_key_file)?
+            } else {
+                SolanaKeyManager::new_with_new_keys(current_key_file, next_key_file, previous_key_file)?
+            }
         } else {
             SolanaKeyManager::new(current_key_file, next_key_file, previous_key_file)?
         };
