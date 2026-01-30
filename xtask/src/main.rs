@@ -220,7 +220,61 @@ pub async fn build_smart_contract() -> Result<()> {
     Ok(())
 }
 
-// be a homie and implement main. AI!
-
 #[tokio::main]
-async fn main() {}
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    // Set up logging
+    if cli.verbose {
+        std::env::set_var("RUST_LOG", "debug");
+    } else {
+        std::env::set_var("RUST_LOG", "info");
+    }
+    tracing_subscriber::fmt::init();
+
+    match cli.command {
+        Commands::BuildNode => {
+            build_node().await?;
+        }
+        Commands::BuildSmartContract => {
+            build_smart_contract().await?;
+        }
+        Commands::GenerateCerts => {
+            info!("Generating test certificates...");
+            // Certificate generation would go here
+            // For now, just log that it's a placeholder
+            info!("Certificate generation is not yet implemented");
+        }
+        Commands::StartNode { show_logs, cert_dir } => {
+            info!("Starting Qcash node...");
+            // This would require setting up keys and certificates
+            // For now, just log that it's a placeholder
+            info!("StartNode command is not yet fully implemented");
+        }
+        Commands::StartValidator { validator_dir, show_logs } => {
+            info!("Starting Solana validator...");
+            // This would start a Solana test validator
+            // For now, just log that it's a placeholder
+            info!("StartValidator command is not yet fully implemented");
+        }
+        Commands::StartTestEnv { 
+            validator_dir, 
+            cert_dir, 
+            number_of_nodes, 
+            show_solana_logs, 
+            show_node_logs 
+        } => {
+            info!("Starting complete test environment...");
+            info!("  - Validator dir: {:?}", validator_dir);
+            info!("  - Cert dir: {:?}", cert_dir);
+            info!("  - Number of nodes: {}", number_of_nodes);
+            info!("  - Show Solana logs: {}", show_solana_logs);
+            info!("  - Show node logs: {}", show_node_logs);
+            // This would orchestrate starting validator, certificates, and nodes
+            // For now, just log that it's a placeholder
+            info!("StartTestEnv command is not yet fully implemented");
+        }
+    }
+
+    Ok(())
+}
