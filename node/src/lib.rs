@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 use anyhow::{Error, Result, anyhow};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use futures::{StreamExt, stream};
-use interface::PROGRAM_ID;
+use interface::{PROGRAM_ID, accounts, instructions, submit_attestation};
 use qcash::QcashEvent;
 use risc0_zkvm::Receipt;
 use sha3::{Digest, Keccak256};
@@ -13,7 +13,10 @@ use solana_client::{
     rpc_config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter},
 };
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
-use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair, signer::Signer};
+use solana_sdk::{
+    commitment_config::CommitmentConfig, message::Message, signature::Keypair, signer::Signer,
+    transaction::Transaction,
+};
 //use solana_sdk::{signature::Keypair, signer::Signer};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
@@ -193,7 +196,7 @@ impl QcashNode {
         });
     }
 
-    async fn process_event(event: Vec<u8>, rpc_client: &RpcClient) {
+    async fn process_event(&self, event: Vec<u8>, rpc_client: &RpcClient) {
         // Parse the event object and process ZkProofChunkWritten messages
         match QcashEvent::parse(&event) {
             Ok(QcashEvent::ZkProofChunkWritten(chunk_event)) => {
@@ -208,7 +211,8 @@ impl QcashNode {
                         "ZK Proof upload complete! Total bytes: {}",
                         chunk_event.total_length
                     );
-                    download_and_verify_proof(&chunk_event.zk_proof, rpc_client).await;
+                    self.process_verify_proof(&chunk_event.zk_proof, rpc_client)
+                        .await;
                 } else {
                     info!(
                         "ZK Proof upload in progress: {}/{} bytes",
@@ -237,26 +241,75 @@ impl QcashNode {
             }
         }
     }
+    async fn process_verify_proof(
+        &self,
+        proof_account: &Pubkey,
+        current_key: &Keypair,
+        previous_key: &Keypair,
+        utxo: &Pubkey,
+        rpc_client: &RpcClient,
+    ) {
+        let proof_result = rpc_client.get_account_data(proof_account).await;
+        match proof_result {
+            Ok(data) => {
+                let receipt_result: Result<Receipt> =
+                    bincode::deserialize(&data).map_err(|e| e.into());
+
+                match receipt_result {
+                    Ok(receipt) => {
+                        if let Err(e) = receipt.verify(IMAGE_ID) {
+                            info!("Proof verification failed: {}", e);
+                            create_submit_attestation_transaction(); //true vote
+                        } else {
+                            info!("Proof verified successfully!");
+                            create_submit_attestation_transaction(); //false vote
+                        }
+                    }
+                    Err(e) => info!("Failed to deserialize proof: {}", e),
+                }
+            }
+            Err(e) => info!("Failed to download proof: {}", e),
+        }
+    }
 }
 
-async fn download_and_verify_proof(proof_account: &Pubkey, rpc_client: &RpcClient) {
-    let proof_result = rpc_client.get_account_data(proof_account).await;
-    match proof_result {
-        Ok(data) => {
-            let receipt_result: Result<Receipt> = bincode::deserialize(&data).map_err(|e| e.into());
-            match receipt_result {
-                Ok(receipt) => {
-                    if let Err(e) = receipt.verify(IMAGE_ID) {
-                        info!("Proof verification failed: {}", e);
-                    } else {
-                        info!("Proof verified successfully!");
-                    }
-                }
-                Err(e) => info!("Failed to deserialize proof: {}", e),
-            }
-        }
-        Err(e) => info!("Failed to download proof: {}", e),
-    }
+//complete this function,add the missing parameters and make sure its called from above. AI!
+fn create_submit_attestation_transaction() {
+    let (prover_registry_pda, _bump) =
+        accounts::SubmitAttestation::prover_registry_pda(&PROGRAM_ID);
+    let (ledger_pda, _bump) = accounts::SubmitAttestation::ledger_pda(&PROGRAM_ID);
+
+    let ix = submit_attestation(
+        &PROGRAM_ID,
+        accounts::SubmitAttestation {
+            prover: current_key.pubkey(),
+            prover_old: previous_key.pubkey(),
+            prover_registry: prover_registry_pda,
+            ledger: ledger_pda,
+            utxo: utxo.to_owned(),
+            ..Default::default()
+        },
+        instructions::SubmitAttestation {
+            next_key_hash,
+            utxo_hash,
+            vote,
+        },
+    );
+
+    // Create a message with the instruction
+    let message = Message::new(&[attestation_instruction], Some(&previous_key.pubkey()));
+
+    // Create the transaction
+    let mut transaction = Transaction::new_unsigned(message);
+    transaction.message.recent_blockhash = recent_blockhash;
+
+    // Sign the transaction with the current key and the previous_key
+    transaction.sign(&[current_key, previous_key], recent_blockhash);
+
+    // Serialize the output
+    let txbin = bincode::serialize(&transaction)?;
+
+    Ok(txbin)
 }
 
 async fn events_subscription(
