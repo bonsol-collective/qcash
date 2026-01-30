@@ -63,7 +63,56 @@ impl QcashEvent {
                 let event = AttestationSubmitted::deserialize(&mut &data[8..])?;
                 Ok(QcashEvent::AttestationSubmitted(event))
             }
-            _ => todo!(), //Impelement  all eventos. AI!
+            LedgerInitialized::DISCRIMINATOR => {
+                let event = LedgerInitialized::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::LedgerInitialized(event))
+            }
+            LoaderChunkWritten::DISCRIMINATOR => {
+                let event = LoaderChunkWritten::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::LoaderChunkWritten(event))
+            }
+            LoaderInitialized::DISCRIMINATOR => {
+                let event = LoaderInitialized::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::LoaderInitialized(event))
+            }
+            ProgramInitialized::DISCRIMINATOR => {
+                let event = ProgramInitialized::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::ProgramInitialized(event))
+            }
+            ProverDeactivated::DISCRIMINATOR => {
+                let event = ProverDeactivated::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::ProverDeactivated(event))
+            }
+            ProverRegistered::DISCRIMINATOR => {
+                let event = ProverRegistered::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::ProverRegistered(event))
+            }
+            UtxoCreated::DISCRIMINATOR => {
+                let event = UtxoCreated::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::UtxoCreated(event))
+            }
+            VaultCompleted::DISCRIMINATOR => {
+                let event = VaultCompleted::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::VaultCompleted(event))
+            }
+            VaultInitialized::DISCRIMINATOR => {
+                let event = VaultInitialized::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::VaultInitialized(event))
+            }
+            ZkProofChunkWritten::DISCRIMINATOR => {
+                let event = ZkProofChunkWritten::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::ZkProofChunkWritten(event))
+            }
+            ZkProofInitialized::DISCRIMINATOR => {
+                let event = ZkProofInitialized::deserialize(&mut &data[8..])?;
+                Ok(QcashEvent::ZkProofInitialized(event))
+            }
+            _ => {
+                // Return an error for unknown discriminators
+                Err(anchor_lang::error::Error::from(
+                    anchor_lang::error::ErrorCode::EventDiscriminatorNotFound
+                ))
+            }
         }
     }
 }
