@@ -208,12 +208,7 @@ impl QcashNode {
                         "ZK Proof upload complete! Total bytes: {}",
                         chunk_event.total_length
                     );
-                    // merge download_proof and verify_proof into a single function. AI!
-                    let proof = download_proof(&chunk_event.zk_proof, rpc_client).await;
-                    match proof {
-                        Ok(p) => verify_proof(p),
-                        Err(e) => info!("Failed to download proof: {}", e),
-                    }
+                    download_and_verify_proof(&chunk_event.zk_proof, rpc_client).await;
                 } else {
                     info!(
                         "ZK Proof upload in progress: {}/{} bytes",
@@ -244,13 +239,24 @@ impl QcashNode {
     }
 }
 
-async fn download_proof(proof_account: &Pubkey, rpc_client: &RpcClient) -> Result<Receipt> {
-    let registry_data = rpc_client.get_account_data(proof_account).await?;
-    Ok(bincode::deserialize(&registry_data)?)
-}
-
-fn verify_proof(receipt: Receipt) {
-    receipt.verify(IMAGE_ID);
+async fn download_and_verify_proof(proof_account: &Pubkey, rpc_client: &RpcClient) {
+    let proof_result = rpc_client.get_account_data(proof_account).await;
+    match proof_result {
+        Ok(data) => {
+            let receipt_result: Result<Receipt> = bincode::deserialize(&data).map_err(|e| e.into());
+            match receipt_result {
+                Ok(receipt) => {
+                    if let Err(e) = receipt.verify(IMAGE_ID) {
+                        info!("Proof verification failed: {}", e);
+                    } else {
+                        info!("Proof verified successfully!");
+                    }
+                }
+                Err(e) => info!("Failed to deserialize proof: {}", e),
+            }
+        }
+        Err(e) => info!("Failed to download proof: {}", e),
+    }
 }
 
 async fn events_subscription(
