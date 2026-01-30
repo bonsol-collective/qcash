@@ -171,7 +171,6 @@ impl SolanaKeyManager {
 }
 
 pub struct QcashNodeConfig {
-    // honor this. AI!
     pub previous_key_file: Option<String>, //Default current-key + .previous
     pub current_key_file: String,
     pub next_key_file: Option<String>, //Default current-key + .next
@@ -184,8 +183,7 @@ impl QcashNodeConfig {
     pub fn new_from_env() -> Result<Self> {
         let current_key_file = std::env::var("SOLANA_CURRENT_KEY_FILE")
             .map_err(|_| anyhow!("SOLANA_CURRENT_KEY_FILE environment variable not set"))?;
-        let previous_key_file = std::env::var("SOLANA_PREVIOUS_KEY_FILE")
-            .map_err(|_| anyhow!("SOLANA_PREVIOUS_KEY_FILE environment variable not set"))?;
+        let previous_key_file = std::env::var("SOLANA_PREVIOUS_KEY_FILE").ok();
         let next_key_file = std::env::var("SOLANA_NEXT_KEY_FILE").ok();
         let websocket_url = std::env::var("SOLANA_WEBSOCKET_URL")
             .map_err(|_| anyhow!("SOLANA_WEBSOCKET_URL environment variable not set"))?;
@@ -219,15 +217,19 @@ impl QcashNode {
             Some(file) => file,
             None => format!("{}.next", current_key_file),
         };
+        let previous_key_file = match config.previous_key_file {
+            Some(file) => file,
+            None => format!("{}.previous", current_key_file),
+        };
 
         let key_manager = if config.generate_keys {
             SolanaKeyManager::new_with_new_keys(
                 current_key_file,
                 next_key_file,
-                config.previous_key_file,
+                previous_key_file,
             )?
         } else {
-            SolanaKeyManager::new(current_key_file, next_key_file, config.previous_key_file)?
+            SolanaKeyManager::new(current_key_file, next_key_file, previous_key_file)?
         };
 
         Ok(QcashNode {
