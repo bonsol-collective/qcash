@@ -18,7 +18,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use tokio::sync::{Mutex, mpsc};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 pub const IMAGE_ID: [u8; 32] = [0; 32];
 
@@ -110,7 +110,7 @@ impl SolanaKeyManager {
         let keypair = Keypair::try_from(&key_data[..])
             .map_err(|e| anyhow!("Failed to parse Solana keypair: {}", e))?;
 
-        info!("Loaded Solana key with public key: {}", keypair.pubkey());
+        debug!("Loaded Solana key with public key: {}", keypair.pubkey());
 
         Ok(keypair)
     }
@@ -187,10 +187,10 @@ impl QcashNodeConfig {
         let next_key_file = std::env::var("SOLANA_NEXT_KEY_FILE").ok();
         let websocket_url = std::env::var("SOLANA_WEBSOCKET_URL")
             .unwrap_or_else(|_| "ws://localhost:8900".to_string());
-        let rpc_url = std::env::var("SOLANA_RPC_URL")
-            .unwrap_or_else(|_| "http://localhost:8899".to_string());
+        let rpc_url =
+            std::env::var("SOLANA_RPC_URL").unwrap_or_else(|_| "http://localhost:8899".to_string());
         let generate_keys = std::env::var("GENERATE_KEYS")
-            .map(|v| v.to_lowercase() == "true")
+            .map(|v| v.to_lowercase() == "true" || v == "1")
             .unwrap_or(false);
 
         Ok(Self {
@@ -244,6 +244,8 @@ impl QcashNode {
             SolanaKeyManager::new(current_key_file, next_key_file, previous_key_file)?
         };
 
+        // print the previous key (call it current key) and the current key (call it next key). AI!
+
         Ok(QcashNode {
             key_manager: Mutex::new(key_manager),
             websocket_url: config.websocket_url,
@@ -258,7 +260,7 @@ impl QcashNode {
         // Spawn the events subscription thread
         tokio::spawn(async move {
             if let Err(e) = events_subscription(websocket_url, tx).await {
-                eprintln!("Events subscription failed: {}", e);
+                error!("Events subscription failed: {}", e);
             }
         });
 
@@ -427,7 +429,7 @@ async fn events_subscription(
 
     loop {
         let r = s().await;
-        info!("Subscription ended, reason {:?}. Reconnecting", r);
+        warn!("Subscription ended, reason {:?}. Reconnecting", r);
         tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
