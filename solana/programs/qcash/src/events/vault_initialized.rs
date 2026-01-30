@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when a vault is initialized
 #[event]
+#[derive(Debug)]
 pub struct VaultInitialized {
     /// Owner of the vault
     pub owner: Pubkey,

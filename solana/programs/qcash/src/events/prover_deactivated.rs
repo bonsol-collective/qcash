@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when a prover is deactivated
 #[event]
+#[derive(Debug)]
 pub struct ProverDeactivated {
     /// Admin who deactivated the prover
     pub admin: Pubkey,

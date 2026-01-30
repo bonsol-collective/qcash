@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when the program is initialized
 #[event]
+#[derive(Debug)]
 pub struct ProgramInitialized {
     /// Admin authority who initialized the program
     pub admin: Pubkey,

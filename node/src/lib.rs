@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 use anyhow::{Error, Result, anyhow};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use futures::{StreamExt, stream};
-use interface::{accounts, instructions, submit_attestation, PROGRAM_ID};
+use interface::{PROGRAM_ID, accounts, instructions, submit_attestation};
 use qcash::QcashEvent;
 use risc0_zkvm::Receipt;
 use sha3::{Digest, Keccak256};
@@ -15,9 +15,9 @@ use solana_client::{
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig, message::Message, signature::Keypair, signer::Signer,
-    transaction::Transaction,
+    sysvar::recent_blockhashes, transaction::Transaction,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, info};
 
 pub const IMAGE_ID: [u8; 32] = [0; 32];
@@ -151,9 +151,9 @@ pub struct QcashNodeConfig {
 }
 
 pub struct QcashNode {
-    key_manager: SolanaKeyManager,
+    key_manager: Mutex<SolanaKeyManager>,
     websocket_url: String,
-    rpc_url: String,
+    rpc_client: RpcClient,
 }
 
 impl QcashNode {
@@ -168,13 +168,13 @@ impl QcashNode {
             SolanaKeyManager::new(current_key_file, next_key_file, config.previous_key_file)?;
 
         Ok(QcashNode {
-            key_manager,
+            key_manager: Mutex::new(key_manager),
             websocket_url: config.websocket_url,
-            rpc_url: config.rpc_url,
+            rpc_client: RpcClient::new(config.rpc_url),
         })
     }
 
-    pub fn start(&self) {
+    pub async fn run(&self) {
         let websocket_url = self.websocket_url.clone();
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
 
@@ -185,53 +185,18 @@ impl QcashNode {
             }
         });
 
-        // Spawn the event processing thread
-        let rpc_url = self.rpc_url.clone();
-        let key_manager = self.key_manager.clone();
-        tokio::spawn(async move {
-            let rpc_client = RpcClient::new(rpc_url);
-            while let Some(event) = rx.recv().await {
-                Self::process_event(event, &rpc_client, &key_manager).await;
-            }
-        });
+        // Start event processing thread
+        while let Some(event) = rx.recv().await {
+            self.process_event(event).await;
+        }
     }
 
-    async fn process_event(event: Vec<u8>, rpc_client: &RpcClient, key_manager: &SolanaKeyManager) {
+    async fn process_event(&self, event: Vec<u8>) {
         // Parse the event object and process ZkProofChunkWritten messages
         match QcashEvent::parse(&event) {
-            Ok(QcashEvent::ZkProofChunkWritten(chunk_event)) => {
-                info!(
-                    "ZK Proof chunk written: {} bytes at offset {}, total length: {}",
-                    chunk_event.new_bytes_written, chunk_event.offset, chunk_event.total_length
-                );
-
-                // Verify that the number of bytes uploaded matches the total
-                if chunk_event.offset + chunk_event.new_bytes_written == chunk_event.total_length {
-                    info!(
-                        "ZK Proof upload complete! Total bytes: {}",
-                        chunk_event.total_length
-                    );
-                    process_verify_proof(
-                        &chunk_event.zk_proof,
-                        key_manager.current_key(),
-                        key_manager.previous_key(),
-                        &chunk_event.zk_proof,
-                        rpc_client,
-                    )
-                    .await;
-                } else {
-                    info!(
-                        "ZK Proof upload in progress: {}/{} bytes",
-                        chunk_event.offset + chunk_event.new_bytes_written,
-                        chunk_event.total_length
-                    );
-                }
-            }
             Ok(QcashEvent::UtxoCreated(utxo_event)) => {
-                info!(
-                    "UTXO created: {:?}, epoch: {}",
-                    utxo_event.utxo_hash, utxo_event.epoch
-                );
+                self.process_utxo_created(&utxo_event.zk_proof, &utxo_event.utxo)
+                    .await;
             }
             Ok(QcashEvent::VaultCompleted(vault_event)) => {
                 info!(
@@ -247,68 +212,51 @@ impl QcashNode {
             }
         }
     }
-}
+    async fn process_utxo_created(&self, zk_proof: &Pubkey, utxo: &Pubkey) -> Result<()> {
+        let proof_data = self
+            .rpc_client
+            .get_account_data(zk_proof)
+            .await
+            .map_err(|e| anyhow!("Failed to download proof: {}", e))?;
 
-async fn process_verify_proof(
-    proof_account: &Pubkey,
-    current_key: &Keypair,
-    previous_key: &Keypair,
-    utxo: &Pubkey,
-    rpc_client: &RpcClient,
-) {
-    let proof_result = rpc_client.get_account_data(proof_account).await;
-    match proof_result {
-        Ok(data) => {
-            let receipt_result: Result<Receipt> =
-                bincode::deserialize(&data).map_err(|e| e.into());
+        let receipt: Receipt =
+            bincode::deserialize(&proof_data).map_err(|e| anyhow!("Can't parse proof"))?;
 
-            match receipt_result {
-                Ok(receipt) => {
-                    if let Err(e) = receipt.verify(IMAGE_ID) {
-                        info!("Proof verification failed: {}", e);
-                        let _ = create_submit_attestation_transaction(
-                            current_key,
-                            previous_key,
-                            utxo,
-                            rpc_client,
-                            true,
-                        )
-                        .await;
-                    } else {
-                        info!("Proof verified successfully!");
-                        let _ = create_submit_attestation_transaction(
-                            current_key,
-                            previous_key,
-                            utxo,
-                            rpc_client,
-                            false,
-                        )
-                        .await;
-                    }
-                }
-                Err(e) => info!("Failed to deserialize proof: {}", e),
-            }
-        }
-        Err(e) => info!("Failed to download proof: {}", e),
+        let key_manager = self.key_manager.lock().await;
+        let next_key_hash = key_manager.next_key_hash().try_into()?;
+
+        let vote = if let Err(e) = receipt.verify(IMAGE_ID) {
+            info!("Proof verification failed: {}", e);
+            false
+        } else {
+            info!("Proof verified successfully!");
+            true
+        };
+
+        let recent_blockhash = self.rpc_client.get_latest_blockhash().await?;
+        create_submit_attestation_transaction(
+            &key_manager.current_key(),
+            &key_manager.previous_key(),
+            next_key_hash,
+            utxo,
+            vote,
+            recent_blockhash,
+        );
+        Ok(())
     }
 }
 
-async fn create_submit_attestation_transaction(
+fn create_submit_attestation_transaction(
     current_key: &Keypair,
     previous_key: &Keypair,
+    next_key_hash: [u8; 32],
     utxo: &Pubkey,
-    rpc_client: &RpcClient,
     vote: bool,
+    recent_blockhash: solana_sdk::hash::Hash,
 ) -> Result<Vec<u8>> {
     let (prover_registry_pda, _bump) =
         accounts::SubmitAttestation::prover_registry_pda(&PROGRAM_ID);
     let (ledger_pda, _bump) = accounts::SubmitAttestation::ledger_pda(&PROGRAM_ID);
-
-    let next_key_hash = {
-        let mut hasher = Keccak256::new();
-        hasher.update(current_key.pubkey().as_ref());
-        hasher.finalize().to_vec()
-    };
 
     let utxo_hash = {
         let mut hasher = Keccak256::new();
@@ -332,8 +280,6 @@ async fn create_submit_attestation_transaction(
             vote,
         },
     );
-
-    let recent_blockhash = rpc_client.get_latest_blockhash().await?;
 
     // Create a message with the instruction
     let message = Message::new(&[ix], Some(&previous_key.pubkey()));

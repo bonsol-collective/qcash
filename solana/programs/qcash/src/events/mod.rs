@@ -2,10 +2,8 @@
 //!
 //! This module defines the various events emitted by the qcash program during its operations.
 
-<<<<<<< HEAD
 pub mod airdrop_completed;
-=======
-use anchor_lang::{AnchorDeserialize, Discriminator, Result};
+use anchor_lang::prelude::*;
 
 >>>>>>> 89cf238 (feat: add event parsing functionality to QcashEvent enum)
 pub mod attestation_submitted;
@@ -36,6 +34,7 @@ pub use vault_initialized::*;
 pub use zk_proof_chunk_written::*;
 pub use zk_proof_initialized::*;
 
+#[derive(Debug)]
 pub enum QcashEvent {
     AttestationSubmitted(AttestationSubmitted),
     LedgerInitialized(LedgerInitialized),
@@ -54,6 +53,11 @@ pub enum QcashEvent {
 impl QcashEvent {
     /// Parse raw event data into a QssnEvent enum
     pub fn parse(data: &[u8]) -> Result<Self> {
+        // Check if data is long enough to contain discriminator (8 bytes)
+        if data.len() < 8 {
+            return Err(ProgramError::InvalidAccountData.into());
+        }
+
         // Extract discriminator (first 8 bytes)
         let discriminator = &data[..8];
 
@@ -107,12 +111,7 @@ impl QcashEvent {
                 let event = ZkProofInitialized::deserialize(&mut &data[8..])?;
                 Ok(QcashEvent::ZkProofInitialized(event))
             }
-            _ => {
-                // Return an error for unknown discriminators
-                Err(anchor_lang::error::Error::from(
-                    anchor_lang::error::ErrorCode::EventDiscriminatorNotFound
-                ))
-            }
+            _ => Err(ProgramError::InvalidAccountData.into()),
         }
     }
 }

@@ -7,6 +7,5 @@ members = [
     "methods",
     "methods/guest",
     "node",
-    "qcash-faucet/backend",
     "wasm",
 ]
