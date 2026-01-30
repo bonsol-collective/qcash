@@ -48,14 +48,14 @@ export const useSolana = () => {
       publicKey: payer.publicKey,
       signTransaction: async <T extends web3.Transaction | web3.VersionedTransaction>(tx: T): Promise<T> => {
         if (tx instanceof web3.Transaction) {
-          tx.sign(payer);
+          tx.partialSign(payer);
         }
         return tx;
       },
       signAllTransactions: async <T extends web3.Transaction | web3.VersionedTransaction>(txs: T[]): Promise<T[]> => {
         txs.forEach((tx) => {
           if (tx instanceof web3.Transaction) {
-            tx.sign(payer);
+            tx.partialSign(payer);
           }
         });
         return txs;

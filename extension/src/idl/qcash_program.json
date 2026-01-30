@@ -613,12 +613,10 @@
         },
         {
           "name": "zk_proof",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "docs": [
+            "We just initialize the data structure here."
+          ],
+          "writable": true
         }
       ],
       "args": [

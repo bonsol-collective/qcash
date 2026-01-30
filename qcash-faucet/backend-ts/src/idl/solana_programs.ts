@@ -619,12 +619,10 @@ export type SolanaPrograms = {
         },
         {
           "name": "zkProof",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
+          "docs": [
+            "We just initialize the data structure here."
+          ],
+          "writable": true
         }
       ],
       "args": [

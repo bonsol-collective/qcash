@@ -8,15 +8,13 @@ pub struct InitZkProof<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     
-    /// CHECK: This account is manually initialized with custom space
+    /// CHECK: Account is pre-created by client via System Program to bypass 10KB CPI limit.
+    /// We just initialize the data structure here.
     #[account(
-        init,
-        payer = signer,
-        space = 8 + 4 + 4 + total_bytes as usize, // discriminator + total_len + bytes_written + proof_data
+        mut,
+        owner = crate::ID,
     )]
     pub zk_proof: AccountInfo<'info>,
-    
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]

@@ -1,4 +1,4 @@
-import { PublicKey, Keypair } from "@solana/web3.js";
+import { PublicKey, Keypair, Transaction, SystemProgram } from "@solana/web3.js";
 import { useSolana } from "./useSolana";
 import { useLedgerSync } from "./useLedgerSync";
 import { useCallback, useState } from "react";
@@ -287,14 +287,34 @@ export const useTransfer = () => {
             console.log("Uploading ZK Proof");
             const zkProofKeypair = Keypair.generate();
 
-            // Init ZK proof account
+            // Pre-create the ZK proof account directly (bypasses 10KB CPI limit)
+            // Space: 8 (discriminator) + 4 (total_len) + 4 (bytes_written) + proof_data
+            const zkProofSpace = 8 + 4 + 4 + proofBytes.length;
+            const lamports = await connection.getMinimumBalanceForRentExemption(zkProofSpace);
+
+            const createAccountTx = new Transaction().add(
+                SystemProgram.createAccount({
+                    fromPubkey: payer.publicKey,
+                    newAccountPubkey: zkProofKeypair.publicKey,
+                    lamports,
+                    space: zkProofSpace,
+                    programId: PROGRAM_ID,
+                })
+            );
+            createAccountTx.feePayer = payer.publicKey;
+            createAccountTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+            createAccountTx.partialSign(payer, zkProofKeypair);
+            const sig = await connection.sendRawTransaction(createAccountTx.serialize());
+            await connection.confirmTransaction(sig, "confirmed");
+            console.log("ZK Proof account created");
+
+            // Now init the ZK proof data structure
             await program.methods
                 .initZkProof(proofBytes.length)
                 .accounts({
                     signer: payer.publicKey,
                     zkProof: zkProofKeypair.publicKey,
                 })
-                .signers([payer, zkProofKeypair])
                 .rpc();
 
             // Write proof in chunks (max 900 bytes per tx to stay under limit)
@@ -349,7 +369,7 @@ export const useTransfer = () => {
                 signer: payer.publicKey,
                 loader: loaderKeypair.publicKey,
             })
-            .signers([payer, loaderKeypair])
+            .signers([loaderKeypair])
             .rpc();
 
         // Write ciphertext in chunks
@@ -398,7 +418,6 @@ export const useTransfer = () => {
                 loader: loaderKeypair.publicKey,
                 zkProof: zkProofPubkey,
             })
-            .signers([payer])
             .rpc();
 
         console.log("UTXO created:", utxoPda.toString());
