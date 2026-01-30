@@ -180,6 +180,7 @@ pub struct QcashNodeConfig {
 
 impl QcashNodeConfig {
     pub fn new_from_env() -> Result<Self> {
+        // add the GENERATE_KEYS param, that will force the node to generate the keys if tehy dont exist. AI!
         let current_key_file = std::env::var("SOLANA_CURRENT_KEY_FILE")
             .map_err(|_| anyhow!("SOLANA_CURRENT_KEY_FILE environment variable not set"))?;
         let previous_key_file = std::env::var("SOLANA_PREVIOUS_KEY_FILE")
