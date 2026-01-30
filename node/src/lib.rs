@@ -181,6 +181,7 @@ pub struct QcashNodeConfig {
 
 impl QcashNodeConfig {
     pub fn new_from_env() -> Result<Self> {
+        // if rpc and websocket is not set, default to localhost (8899/8900). AI!
         let current_key_file = std::env::var("SOLANA_CURRENT_KEY_FILE")
             .map_err(|_| anyhow!("SOLANA_CURRENT_KEY_FILE environment variable not set"))?;
         let previous_key_file = std::env::var("SOLANA_PREVIOUS_KEY_FILE").ok();
@@ -229,10 +230,16 @@ impl QcashNode {
 
         let key_manager = if config.generate_keys {
             if keys_exist {
-                warn!("generate_keys is set to true, but keys already exist. Loading existing keys instead of generating new ones.");
+                warn!(
+                    "GENERATE_KEYS is set to true, but keys already exist. Loading existing keys instead of generating new ones."
+                );
                 SolanaKeyManager::new(current_key_file, next_key_file, previous_key_file)?
             } else {
-                SolanaKeyManager::new_with_new_keys(current_key_file, next_key_file, previous_key_file)?
+                SolanaKeyManager::new_with_new_keys(
+                    current_key_file,
+                    next_key_file,
+                    previous_key_file,
+                )?
             }
         } else {
             SolanaKeyManager::new(current_key_file, next_key_file, previous_key_file)?
