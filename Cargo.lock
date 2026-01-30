@@ -3113,6 +3113,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "futures",
+ "hex",
  "interface",
  "qcash",
  "risc0-zkvm",

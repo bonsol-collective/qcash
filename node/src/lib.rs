@@ -97,7 +97,7 @@ impl SolanaKeyManager {
 
     /// Load Solana keypair from file
     fn load_solana_key(key_file: impl AsRef<Path>) -> Result<Keypair> {
-        info!("Loading Solana key from {:?}", key_file.as_ref());
+        debug!("Loading Solana key from {:?}", key_file.as_ref());
 
         if !key_file.as_ref().exists() {
             return Err(anyhow!(
@@ -245,8 +245,11 @@ impl QcashNode {
         };
 
         // print the previous key (call it current key) and the current key (call it next key)
-        info!("Previous key (current key): {}", key_manager.previous_key().pubkey());
-        info!("Current key (next key): {}", key_manager.current_key().pubkey());
+        info!("Node key: {}", key_manager.previous_key().pubkey());
+        info!(
+            "Next key hash: {}",
+            hex::encode(key_manager.next_key_hash())
+        );
 
         Ok(QcashNode {
             key_manager: Mutex::new(key_manager),
