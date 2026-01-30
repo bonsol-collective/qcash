@@ -171,7 +171,8 @@ impl SolanaKeyManager {
 }
 
 pub struct QcashNodeConfig {
-    pub previous_key_file: String,
+    // honor this. AI!
+    pub previous_key_file: Option<String>, //Default current-key + .previous
     pub current_key_file: String,
     pub next_key_file: Option<String>, //Default current-key + .next
     pub websocket_url: String,
