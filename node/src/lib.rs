@@ -182,7 +182,6 @@ impl QcashNode {
     }
 
     async fn process_event(event: Vec<u8>) {
-        // parse events. AI!
         // Stub: Parse and process the event
         info!("Processing event: {:?}", event);
         // TODO: Implement actual parsing and processing logic
