@@ -67,6 +67,8 @@ impl SolanaKeyManager {
         })
     }
 
+    // add new_with_new_keys that will generate all keys instead of loading them. AI!
+
     /// Load Solana keypair from file
     fn load_solana_key(key_file: impl AsRef<Path>) -> Result<Keypair> {
         info!("Loading Solana key from {:?}", key_file.as_ref());
