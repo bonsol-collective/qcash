@@ -15,10 +15,10 @@ use solana_client::{
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig, message::Message, signature::Keypair, signer::Signer,
-    sysvar::recent_blockhashes, transaction::Transaction,
+    transaction::Transaction,
 };
 use tokio::sync::{Mutex, mpsc};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 pub const IMAGE_ID: [u8; 32] = [0; 32];
 
@@ -150,6 +150,8 @@ pub struct QcashNodeConfig {
     pub rpc_url: String,
 }
 
+//implement qcashnodeconfig::new_from_env(). AI!
+
 pub struct QcashNode {
     key_manager: Mutex<SolanaKeyManager>,
     websocket_url: String,
@@ -195,8 +197,16 @@ impl QcashNode {
         // Parse the event object and process ZkProofChunkWritten messages
         match QcashEvent::parse(&event) {
             Ok(QcashEvent::UtxoCreated(utxo_event)) => {
-                self.process_utxo_created(&utxo_event.zk_proof, &utxo_event.utxo)
-                    .await;
+                if let Err(e) = self
+                    .process_utxo_created(
+                        &utxo_event.zk_proof,
+                        &utxo_event.utxo,
+                        utxo_event.utxo_hash,
+                    )
+                    .await
+                {
+                    warn!("Failed to process Utxo: {}", e);
+                }
             }
             Ok(QcashEvent::VaultCompleted(vault_event)) => {
                 info!(
@@ -212,7 +222,12 @@ impl QcashNode {
             }
         }
     }
-    async fn process_utxo_created(&self, zk_proof: &Pubkey, utxo: &Pubkey) -> Result<()> {
+    async fn process_utxo_created(
+        &self,
+        zk_proof: &Pubkey,
+        utxo: &Pubkey,
+        utxo_hash: [u8; 32],
+    ) -> Result<()> {
         let proof_data = self
             .rpc_client
             .get_account_data(zk_proof)
@@ -220,10 +235,10 @@ impl QcashNode {
             .map_err(|e| anyhow!("Failed to download proof: {}", e))?;
 
         let receipt: Receipt =
-            bincode::deserialize(&proof_data).map_err(|e| anyhow!("Can't parse proof"))?;
+            bincode::deserialize(&proof_data).map_err(|e| anyhow!("Can't parse proof: {}", e))?;
 
         let key_manager = self.key_manager.lock().await;
-        let next_key_hash = key_manager.next_key_hash().try_into()?;
+        let next_key_hash = key_manager.next_key_hash().try_into().unwrap();
 
         let vote = if let Err(e) = receipt.verify(IMAGE_ID) {
             info!("Proof verification failed: {}", e);
@@ -234,14 +249,17 @@ impl QcashNode {
         };
 
         let recent_blockhash = self.rpc_client.get_latest_blockhash().await?;
-        create_submit_attestation_transaction(
+        let tx = create_submit_attestation_transaction(
             &key_manager.current_key(),
             &key_manager.previous_key(),
             next_key_hash,
             utxo,
+            utxo_hash,
             vote,
             recent_blockhash,
-        );
+        )?;
+        self.rpc_client.send_and_confirm_transaction(&tx).await?;
+
         Ok(())
     }
 }
@@ -251,18 +269,13 @@ fn create_submit_attestation_transaction(
     previous_key: &Keypair,
     next_key_hash: [u8; 32],
     utxo: &Pubkey,
+    utxo_hash: [u8; 32],
     vote: bool,
     recent_blockhash: solana_sdk::hash::Hash,
-) -> Result<Vec<u8>> {
+) -> Result<Transaction> {
     let (prover_registry_pda, _bump) =
         accounts::SubmitAttestation::prover_registry_pda(&PROGRAM_ID);
     let (ledger_pda, _bump) = accounts::SubmitAttestation::ledger_pda(&PROGRAM_ID);
-
-    let utxo_hash = {
-        let mut hasher = Keccak256::new();
-        hasher.update(utxo.as_ref());
-        hasher.finalize().to_vec()
-    };
 
     let ix = submit_attestation(
         &PROGRAM_ID,
@@ -291,10 +304,7 @@ fn create_submit_attestation_transaction(
     // Sign the transaction with the current key and the previous_key
     transaction.sign(&[current_key, previous_key], recent_blockhash);
 
-    // Serialize the output
-    let txbin = bincode::serialize(&transaction)?;
-
-    Ok(txbin)
+    Ok(transaction)
 }
 
 async fn events_subscription(
