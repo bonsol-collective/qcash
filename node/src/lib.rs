@@ -176,11 +176,11 @@ pub struct QcashNodeConfig {
     pub next_key_file: Option<String>, //Default current-key + .next
     pub websocket_url: String,
     pub rpc_url: String,
+    pub generate_keys: bool,
 }
 
 impl QcashNodeConfig {
     pub fn new_from_env() -> Result<Self> {
-        // add the GENERATE_KEYS param, that will force the node to generate the keys if tehy dont exist. AI!
         let current_key_file = std::env::var("SOLANA_CURRENT_KEY_FILE")
             .map_err(|_| anyhow!("SOLANA_CURRENT_KEY_FILE environment variable not set"))?;
         let previous_key_file = std::env::var("SOLANA_PREVIOUS_KEY_FILE")
@@ -190,6 +190,9 @@ impl QcashNodeConfig {
             .map_err(|_| anyhow!("SOLANA_WEBSOCKET_URL environment variable not set"))?;
         let rpc_url = std::env::var("SOLANA_RPC_URL")
             .map_err(|_| anyhow!("SOLANA_RPC_URL environment variable not set"))?;
+        let generate_keys = std::env::var("GENERATE_KEYS")
+            .map(|v| v.to_lowercase() == "true")
+            .unwrap_or(false);
 
         Ok(Self {
             previous_key_file,
@@ -197,6 +200,7 @@ impl QcashNodeConfig {
             next_key_file,
             websocket_url,
             rpc_url,
+            generate_keys,
         })
     }
 }
@@ -215,8 +219,15 @@ impl QcashNode {
             None => format!("{}.next", current_key_file),
         };
 
-        let key_manager =
-            SolanaKeyManager::new(current_key_file, next_key_file, config.previous_key_file)?;
+        let key_manager = if config.generate_keys {
+            SolanaKeyManager::new_with_new_keys(
+                current_key_file,
+                next_key_file,
+                config.previous_key_file,
+            )?
+        } else {
+            SolanaKeyManager::new(current_key_file, next_key_file, config.previous_key_file)?
+        };
 
         Ok(QcashNode {
             key_manager: Mutex::new(key_manager),
