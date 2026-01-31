@@ -458,7 +458,12 @@ async fn main() -> Result<()> {
             show_logs,
         } => {
             info!("Starting Solana validator...");
-            // implement this. AI!
+            let dir = validator_dir.unwrap_or_else(|| {
+                let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+                temp_dir.into_path()
+            });
+            
+            start_solana_validator(&dir, vec![], show_logs).await?;
         }
         Commands::StartTestEnv {
             validator_dir,
