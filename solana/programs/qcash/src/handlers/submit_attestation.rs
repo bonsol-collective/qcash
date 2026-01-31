@@ -57,8 +57,7 @@ pub fn submit_attestation(
     let utxo_key = ctx.accounts.utxo.key();
     let utxo = &mut ctx.accounts.utxo;
     let prover_registry = &mut ctx.accounts.prover_registry;
-    let prover_old_pubkey = ctx.accounts.prover_old.key();
-    let prover_new_pubkey = ctx.accounts.prover.key();
+    let prover_pubkey = ctx.accounts.prover.key();
 
     // Verify UTXO's previous hash matches ledger's last valid hash
     require!(
@@ -67,10 +66,10 @@ pub fn submit_attestation(
     );
 
     // Hash OLD prover's public key for verification
-    let prover_old_pubkey_hash = hash(prover_old_pubkey.as_ref()).to_bytes();
+    let prover_pubkey_hash = hash(prover_pubkey.as_ref()).to_bytes();
 
     // Get prover from registry using OLD pubkey hash
-    let prover_info = prover_registry.get_prover_mut(&prover_old_pubkey_hash)?;
+    let prover_info = prover_registry.get_prover_mut(&prover_pubkey_hash)?;
 
     // Verify prover is active
     require!(prover_info.is_active(), ErrorCode::ProverNotActive);
@@ -111,9 +110,8 @@ pub fn submit_attestation(
     emit!(AttestationSubmitted {
         utxo: utxo_key,
         utxo_hash: utxo.utxo_hash,
-        prover_old: prover_old_pubkey,
-        prover_old_hash: prover_old_pubkey_hash,
-        prover_new: prover_new_pubkey,
+        prover_old: ctx.accounts.prover_old.key(),
+        prover: prover_pubkey,
         prover_unique_id,
         vote,
         next_key_hash,
