@@ -9,7 +9,7 @@ use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use interface::{accounts, instructions};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha3::{Digest, Keccak256};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
@@ -408,8 +408,8 @@ pub async fn install_extension() -> Result<()> {
             .join("NativeMessagingHosts")
     } else if cfg!(target_os = "windows") {
         // Windows: %LOCALAPPDATA%\Google\Chrome\User Data\Default\NativeMessagingHosts
-        let local_app_data = std::env::var("LOCALAPPDATA")
-            .context("LOCALAPPDATA environment variable not set")?;
+        let local_app_data =
+            std::env::var("LOCALAPPDATA").context("LOCALAPPDATA environment variable not set")?;
         Path::new(&local_app_data)
             .join("Google")
             .join("Chrome")
@@ -430,20 +430,14 @@ pub async fn install_extension() -> Result<()> {
 
     // Write the updated config to the NativeMessagingHosts directory
     let target_path = native_messaging_dir.join("com.qcash.daemon.json");
-    std::fs::write(&target_path, &updated_config).context(format!(
-        "Failed to write config to: {:?}",
-        target_path
-    ))?;
+    std::fs::write(&target_path, &updated_config)
+        .context(format!("Failed to write config to: {:?}", target_path))?;
 
     println!(
         "{}",
         "✅ Configuration updated successfully!".bold().green()
     );
-    println!(
-        "{} {:?}",
-        "Config written to:".bold().green(),
-        target_path
-    );
+    println!("{} {:?}", "Config written to:".bold().green(), target_path);
 
     Ok(())
 }
