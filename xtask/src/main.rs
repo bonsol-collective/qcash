@@ -229,7 +229,6 @@ pub async fn build_node() -> Result<()> {
 }
 
 /// Build browser extension
-//build the wasm dir too, cd wasm, wasm-pack build --target web. AI!
 pub async fn build_extension() -> Result<()> {
     use tokio::process::Command;
 
@@ -264,6 +263,22 @@ pub async fn build_extension() -> Result<()> {
         return Err(anyhow::anyhow!(
             "npm run build failed: {}",
             String::from_utf8_lossy(&build_output.stderr)
+        ));
+    }
+
+    // Build the wasm directory
+    info!("Building wasm with wasm-pack...");
+    let wasm_build_output = Command::new("wasm-pack")
+        .args(&["build", "--target", "web"])
+        .current_dir("wasm")
+        .output()
+        .await
+        .context("Failed to build wasm with wasm-pack")?;
+
+    if !wasm_build_output.status.success() {
+        return Err(anyhow::anyhow!(
+            "wasm-pack build failed: {}",
+            String::from_utf8_lossy(&wasm_build_output.stderr)
         ));
     }
 
