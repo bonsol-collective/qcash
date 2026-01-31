@@ -14,7 +14,7 @@ use serde::Serialize;
 use sha3::{Digest, Keccak256};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
-    commitment_config::CommitmentConfig, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey,
+    commitment_config::CommitmentConfig, native_token::LAMPORTS_PER_SOL, pubkey, pubkey::Pubkey,
     signature::Keypair, signer::Signer,
 };
 use tempfile::{NamedTempFile, tempdir};
@@ -26,6 +26,9 @@ use tokio::{
 };
 use tracing::{Level, info, warn};
 use tracing_subscriber::FmtSubscriber;
+
+const FAUCET_WALLET: &str = include_str!("../../qcash-faucet/faucet-wallet.json");
+const FAUCET_PUBKEY: Pubkey = pubkey!("43XSgRV3LPo3gWMVJYLHYnnEayVa5sbXT12zJ2uih4j7");
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -340,6 +343,7 @@ pub async fn run_faucet(wait: bool) -> Result<(Child, Child)> {
     let mut backend_process = Command::new("npm")
         .args(&["run", "dev"])
         .current_dir(backend_dir)
+        .env("FAUCET_KEY", FAUCET_WALLET)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -845,11 +849,11 @@ async fn start_test_environment(
     // Create owner keypair
     let owner = Arc::new(Keypair::new());
 
-    // Fund the owner account
-    let mut validator_accounts = vec![SolanaAccount::new_with_lamports(
-        owner.pubkey(),
-        LAMPORTS_PER_SOL,
-    )?];
+    // Fund the owner and the faucet accounts
+    let mut validator_accounts = vec![
+        SolanaAccount::new_with_lamports(owner.pubkey(), LAMPORTS_PER_SOL)?,
+        SolanaAccount::new_with_lamports(FAUCET_PUBKEY, LAMPORTS_PER_SOL)?,
+    ];
 
     // Generate keys for all nodes before starting validator
     let mut node_solana_keys = Vec::new();
