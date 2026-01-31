@@ -2,6 +2,7 @@ use node::{QcashNode, QcashNodeConfig};
 
 #[tokio::main]
 async fn main() {
+    // if JSON_LOG is set, call .json() to the tracing subscriber. AI!
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env()) // Respect RUST_LOG env
         .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
