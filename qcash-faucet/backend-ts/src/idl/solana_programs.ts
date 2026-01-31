@@ -724,6 +724,15 @@ export type SolanaPrograms = {
         {
           "name": "uniqueId",
           "type": "u64"
+        },
+        {
+          "name": "nextKeyHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
