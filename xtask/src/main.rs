@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
 use interface::{accounts, instructions};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use sha3::{Digest, Keccak256};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
@@ -67,6 +67,8 @@ enum Commands {
     BuildSmartContract,
     /// Build the browser extension
     BuildExtension,
+    /// Install the Chrome extension
+    InstallExtension,
     /// Start Qcash node (uses generated test keys)
     StartNode {
         /// Show node logs
@@ -281,6 +283,105 @@ pub async fn build_extension() -> Result<()> {
             String::from_utf8_lossy(&build_output.stderr)
         ));
     }
+
+    Ok(())
+}
+
+/// Install Chrome extension
+pub async fn install_extension() -> Result<()> {
+    use std::io::{self, Write};
+    use std::path::Path;
+    use tokio::process::Command;
+
+    // Display formatted instructions
+    println!("\n{}", "=".repeat(60));
+    println!("{}", "Chrome Extension Installation Instructions".bold().cyan());
+    println!("{}", "=".repeat(60));
+    println!();
+    println!("{}", "1. Open Google Chrome and navigate to:".bold().yellow());
+    println!("   {}", "chrome://extensions".cyan());
+    println!();
+    println!("{}", "2. Enable Developer mode:".bold().yellow());
+    println!("   {}", "Toggle the switch in the top right corner".cyan());
+    println!();
+    println!("{}", "3. Click 'Load unpacked':".bold().yellow());
+    println!("   {}", "Select the extension/dist folder".cyan());
+    println!();
+    println!("{}", "4. Note the Extension ID:".bold().yellow());
+    println!("   {}", "Copy the ID displayed in the extension card".cyan());
+    println!();
+    println!("{}", "=".repeat(60));
+    println!();
+
+    // Prompt for extension ID
+    print!("{}", "Enter the Chrome Extension ID: ".bold().green());
+    io::stdout().flush()?;
+
+    let mut extension_id = String::new();
+    io::stdin().read_line(&mut extension_id)?;
+    let extension_id = extension_id.trim();
+
+    if extension_id.is_empty() {
+        return Err(anyhow::anyhow!("Extension ID cannot be empty"));
+    }
+
+    // Get absolute path to daemon binary
+    let daemon_path = std::env::current_dir()?
+        .join("target")
+        .join("debug")
+        .join("daemon")
+        .to_string_lossy()
+        .to_string();
+
+    println!();
+    println!("{} {}", "Using daemon path:".bold().green(), daemon_path.cyan());
+    println!("{} {}", "Using extension ID:".bold().green(), extension_id.cyan());
+    println!();
+
+    // Load and parse com.qcash.daemon.json
+    let config_path = Path::new("com.qcash.daemon.json");
+    if !config_path.exists() {
+        return Err(anyhow::anyhow!(
+            "com.qcash.daemon.json not found in current directory"
+        ));
+    }
+
+    let config_content = std::fs::read_to_string(config_path)?;
+    let mut config: serde_json::Value = serde_json::from_str(&config_content)?;
+
+    // Update allowed_origins
+    if let Some(obj) = config.as_object_mut() {
+        if let Some(allowed_origins) = obj.get_mut("allowed_origins").and_then(|v| v.as_array_mut()) {
+            allowed_origins.clear();
+            allowed_origins.push(serde_json::Value::String(format!(
+                "chrome-extension://{}/",
+                extension_id
+            )));
+        }
+
+        // Update path
+        obj.insert(
+            "path".to_string(),
+            serde_json::Value::String(daemon_path.clone()),
+        );
+    }
+
+    // Write updated config back
+    let updated_config = serde_json::to_string_pretty(&config)?;
+    std::fs::write(config_path, &updated_config)?;
+
+    println!("{}", "✅ Configuration updated successfully!".bold().green());
+    println!();
+    println!("{}", "Updated com.qcash.daemon.json:".bold().yellow());
+    println!("{}", updated_config.cyan());
+    println!();
+    println!("{}", "=".repeat(60));
+    println!("{}", "Next steps:".bold().green());
+    println!("1. Reload the extension in Chrome (click the refresh icon)");
+    println!("2. The native messaging host should now be configured");
+    println!("3. Test the extension by opening the popup");
+    println!("{}", "=".repeat(60));
+    println!();
 
     Ok(())
 }
@@ -697,6 +798,9 @@ async fn main() -> Result<()> {
         }
         Commands::BuildExtension => {
             build_extension().await?;
+        }
+        Commands::InstallExtension => {
+            install_extension().await?;
         }
         Commands::StartNode {
             show_logs,
