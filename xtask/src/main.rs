@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 use colored::Colorize;
 use interface::{accounts, instructions};
 use serde::Serialize;
-use sha3::{Digest, Keccak256};
+use sha2::{Digest, Sha256};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig, native_token::LAMPORTS_PER_SOL, pubkey, pubkey::Pubkey,
@@ -933,7 +933,7 @@ async fn start_test_environment(
 
     // Add nodes
     for (i, solana_keys) in node_solana_keys.iter().enumerate() {
-        let next_key_hash = calculate_keccak_hash(&solana_keys.1.keypair.pubkey().to_bytes());
+        let next_key_hash = calculate_sha256_hash(&solana_keys.1.keypair.pubkey().to_bytes());
         let register_prover = interface::register_prover(
             &interface::PROGRAM_ID,
             accounts::RegisterProver {
@@ -1076,8 +1076,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn calculate_keccak_hash(data: &[u8]) -> [u8; 32] {
-    let mut hasher = Keccak256::new();
+fn calculate_sha256_hash(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
     hasher.update(data);
     hasher.finalize().to_vec().try_into().unwrap()
 }
