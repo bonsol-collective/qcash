@@ -229,11 +229,12 @@ pub async fn build_node() -> Result<()> {
 }
 
 /// Build browser extension
+//build the wasm dir too, cd wasm, wasm-pack build --target web. AI!
 pub async fn build_extension() -> Result<()> {
     use tokio::process::Command;
 
     info!("Building browser extension...");
-    
+
     // Run npm install
     info!("Running npm install...");
     let install_output = Command::new("npm")
