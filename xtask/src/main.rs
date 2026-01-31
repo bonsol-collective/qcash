@@ -1,5 +1,5 @@
 use std::{
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -7,8 +7,9 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use interface::{accounts, instructions};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
@@ -288,17 +289,20 @@ pub async fn build_extension() -> Result<()> {
 }
 
 /// Install Chrome extension
+// build the extension first, just in case. AI!
 pub async fn install_extension() -> Result<()> {
-    use std::io::{self, Write};
-    use std::path::Path;
-    use tokio::process::Command;
-
     // Display formatted instructions
     println!("\n{}", "=".repeat(60));
-    println!("{}", "Chrome Extension Installation Instructions".bold().cyan());
+    println!(
+        "{}",
+        "Chrome Extension Installation Instructions".bold().cyan()
+    );
     println!("{}", "=".repeat(60));
     println!();
-    println!("{}", "1. Open Google Chrome and navigate to:".bold().yellow());
+    println!(
+        "{}",
+        "1. Open Google Chrome and navigate to:".bold().yellow()
+    );
     println!("   {}", "chrome://extensions".cyan());
     println!();
     println!("{}", "2. Enable Developer mode:".bold().yellow());
@@ -308,7 +312,10 @@ pub async fn install_extension() -> Result<()> {
     println!("   {}", "Select the extension/dist folder".cyan());
     println!();
     println!("{}", "4. Note the Extension ID:".bold().yellow());
-    println!("   {}", "Copy the ID displayed in the extension card".cyan());
+    println!(
+        "   {}",
+        "Copy the ID displayed in the extension card".cyan()
+    );
     println!();
     println!("{}", "=".repeat(60));
     println!();
@@ -334,8 +341,16 @@ pub async fn install_extension() -> Result<()> {
         .to_string();
 
     println!();
-    println!("{} {}", "Using daemon path:".bold().green(), daemon_path.cyan());
-    println!("{} {}", "Using extension ID:".bold().green(), extension_id.cyan());
+    println!(
+        "{} {}",
+        "Using daemon path:".bold().green(),
+        daemon_path.cyan()
+    );
+    println!(
+        "{} {}",
+        "Using extension ID:".bold().green(),
+        extension_id.cyan()
+    );
     println!();
 
     // Load and parse com.qcash.daemon.json
@@ -351,7 +366,10 @@ pub async fn install_extension() -> Result<()> {
 
     // Update allowed_origins
     if let Some(obj) = config.as_object_mut() {
-        if let Some(allowed_origins) = obj.get_mut("allowed_origins").and_then(|v| v.as_array_mut()) {
+        if let Some(allowed_origins) = obj
+            .get_mut("allowed_origins")
+            .and_then(|v| v.as_array_mut())
+        {
             allowed_origins.clear();
             allowed_origins.push(serde_json::Value::String(format!(
                 "chrome-extension://{}/",
@@ -370,7 +388,10 @@ pub async fn install_extension() -> Result<()> {
     let updated_config = serde_json::to_string_pretty(&config)?;
     std::fs::write(config_path, &updated_config)?;
 
-    println!("{}", "✅ Configuration updated successfully!".bold().green());
+    println!(
+        "{}",
+        "✅ Configuration updated successfully!".bold().green()
+    );
     println!();
     println!("{}", "Updated com.qcash.daemon.json:".bold().yellow());
     println!("{}", updated_config.cyan());
