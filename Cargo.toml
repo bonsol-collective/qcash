@@ -7,5 +7,6 @@ members = [
     "methods",
     "methods/guest",
     "node",
-    "wasm", "xtask",
+    "wasm",
+    "xtask",
 ]
