@@ -1,13 +1,18 @@
 use std::{
     io::Write,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
-use solana_sdk::pubkey::Pubkey;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{
+    commitment_config::CommitmentConfig, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey,
+    signature::Keypair, signer::Signer,
+};
 use tempfile::{NamedTempFile, tempdir};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
@@ -127,6 +132,46 @@ impl SolanaAccount {
 
         self.temp_file.write_all(json.as_bytes())?;
         Ok(())
+    }
+}
+
+/// Helper to create temporary Solana key files for testing
+pub async fn create_test_solana_keys() -> Result<(TempKeypair, TempKeypair)> {
+    let current_key_file = NamedTempFile::new()?;
+    let next_key_file = NamedTempFile::new()?;
+
+    // Generate Solana keys using the proper format
+    let current_key = solana_sdk::signature::Keypair::new();
+    let next_key = solana_sdk::signature::Keypair::new();
+
+    // Save keys to files in the correct format (64 bytes each)
+    std::fs::write(current_key_file.path(), current_key.to_bytes())?;
+    std::fs::write(next_key_file.path(), next_key.to_bytes())?;
+
+    Ok((
+        TempKeypair {
+            file: current_key_file,
+            keypair: current_key,
+        },
+        TempKeypair {
+            file: next_key_file,
+            keypair: next_key,
+        },
+    ))
+}
+
+pub struct TempKeypair {
+    pub file: NamedTempFile,
+    pub keypair: Keypair,
+}
+
+impl TempKeypair {
+    pub fn path(&self) -> Result<String> {
+        self.file
+            .path()
+            .to_str()
+            .map(|s| s.to_owned())
+            .ok_or_else(|| anyhow!("Can't get path"))
     }
 }
 
@@ -299,7 +344,7 @@ pub async fn start_solana_validator(
 }
 
 /// Start Qfire node
-pub async fn start_qfire_node(
+pub async fn start_node(
     solana_current_key: &str,
     solana_next_key: &str,
     show_logs: bool,
@@ -411,6 +456,133 @@ pub async fn build_smart_contract() -> Result<()> {
     Ok(())
 }
 
+async fn start_test_environment(
+    validator_dir: Option<PathBuf>,
+    show_solana_logs: bool,
+    show_server_logs: bool,
+    show_node_logs: bool,
+    cert_dir: Option<PathBuf>,
+    number_of_nodes: usize,
+) -> Result<()> {
+    info!("Starting complete test environment...");
+
+    // Build components
+    build_smart_contract().await?;
+    build_node().await?;
+
+    // Use temporary directory if no validator directory is specified
+    let validator_dir = match validator_dir {
+        Some(dir) => dir,
+        None => {
+            let temp_validator_dir = tempfile::tempdir()?;
+            temp_validator_dir.path().to_path_buf()
+        }
+    };
+
+    // Create owner keypair
+    let owner = Arc::new(Keypair::new());
+
+    // Fund the owner account
+    let mut validator_accounts = vec![SolanaAccount::new_with_lamports(
+        owner.pubkey(),
+        LAMPORTS_PER_SOL,
+    )?];
+
+    // Generate keys for all nodes before starting validator
+    let mut node_solana_keys = Vec::new();
+    for _i in 0..number_of_nodes {
+        let solana_keys = create_test_solana_keys().await?;
+        let pubkey = solana_keys.0.keypair.pubkey();
+        node_solana_keys.push(solana_keys);
+        validator_accounts.push(SolanaAccount::new_with_lamports(pubkey, LAMPORTS_PER_SOL)?);
+    }
+
+    // Start validator
+    let mut validator_process =
+        start_solana_validator(&validator_dir, validator_accounts, show_solana_logs).await?;
+    info!("Solana validator started");
+
+    // Start nodes and collect their keys
+    let mut node_processes = Vec::new();
+    for i in 0..number_of_nodes {
+        let solana_keys = &node_solana_keys[i];
+
+        let node_process = start_node(
+            &solana_keys.0.path()?,
+            &solana_keys.1.path()?,
+            show_node_logs,
+        )
+        .await?;
+        info!("Qcash node {} started", i + 1);
+        info!(
+            "  Solana current pubkey: {}",
+            solana_keys.0.keypair.pubkey()
+        );
+        node_processes.push(node_process);
+    }
+
+    // Initialize the Solana program
+    info!("Initializing Solana program configuration...");
+
+    // Create RPC client
+    let rpc_client = Arc::new(RpcClient::new_with_commitment(
+        "http://localhost:8899".to_string(),
+        CommitmentConfig::confirmed(),
+    ));
+
+    // Create root prover data for all nodes
+    let mut root_provers = Vec::new();
+    for (i, solana_keys) in node_solana_keys.iter().enumerate() {
+        let prover_pubkey_hash = calculate_keccak_hash(&solana_keys.1.keypair.pubkey().to_bytes());
+        root_provers.push(RootProverData {
+            pubkey_hash: prover_pubkey_hash.try_into().unwrap(),
+            stake_amount: 1_000_000_000,
+            unique_id: (i + 1) as u64,
+        });
+    }
+
+    // Get PDAs
+    let (program_config_pda, _program_config_bump) =
+        InitializeProgramConfig::program_config_pda(&interface::PROGRAM_ID);
+    let (prover_registry_pda, _) =
+        InitializeProgramConfig::prover_registry_pda(&interface::PROGRAM_ID);
+
+    // Create initialize program config instruction
+    let initialize_program_config = interface::initialize_program_config(
+        &interface::PROGRAM_ID,
+        interface::accounts::InitializeProgramConfig {
+            deployer: owner.pubkey(),
+            prover_registry: prover_registry_pda,
+            program_config: program_config_pda,
+            ..Default::default()
+        },
+        interface::instructions::InitializeProgramConfig {
+            default_min_votes: 1,
+            root_provers,
+        },
+    );
+
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    // Send the transaction
+    send_transaction(&rpc_client, &owner, &[initialize_program_config]).await?;
+    info!("Solana program configuration initialized!");
+
+    info!("Test environment is running. Press Ctrl+C to stop.");
+
+    // Wait for Ctrl+C
+    tokio::signal::ctrl_c().await?;
+
+    // Clean up
+    info!("Shutting down test environment...");
+    for mut node_process in node_processes {
+        node_process.kill().await?;
+    }
+    server_process.kill().await?;
+    validator_process.kill().await?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -437,13 +609,13 @@ async fn main() -> Result<()> {
             keys_dir,
         } => {
             info!("Starting Qcash node...");
-            
+
             // Generate temp directory if keys_dir is None
             let keys_path = if let Some(dir) = keys_dir {
                 dir
             } else {
                 let temp_dir = tempdir()?;
-                temp_dir.into_path()
+                temp_dir.keep()
             };
 
             // Create key file paths
@@ -453,38 +625,13 @@ async fn main() -> Result<()> {
             // Ensure the directory exists
             std::fs::create_dir_all(&keys_path)?;
 
-            // Generate test keys if they don't exist
-            if !current_key_path.exists() {
-                info!("Generating test Solana keys...");
-                use tokio::process::Command;
-                
-                // Generate current key
-                let current_output = Command::new("solana-keygen")
-                    .args(&["new", "-f", current_key_path.to_str().unwrap(), "--no-bip39-passphrase"])
-                    .output()
-                    .await?;
-                
-                if !current_output.status.success() {
-                    return Err(anyhow::anyhow!("Failed to generate current key"));
-                }
-
-                // Generate next key
-                let next_output = Command::new("solana-keygen")
-                    .args(&["new", "-f", next_key_path.to_str().unwrap(), "--no-bip39-passphrase"])
-                    .output()
-                    .await?;
-
-                if !next_output.status.success() {
-                    return Err(anyhow::anyhow!("Failed to generate next key"));
-                }
-            }
-
             // Start the node
-            start_qfire_node(
+            start_node(
                 current_key_path.to_str().unwrap(),
                 next_key_path.to_str().unwrap(),
                 show_logs,
-            ).await?;
+            )
+            .await?;
         }
         Commands::StartValidator {
             validator_dir,
@@ -493,7 +640,7 @@ async fn main() -> Result<()> {
             info!("Starting Solana validator...");
             let dir = validator_dir.unwrap_or_else(|| {
                 let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-                temp_dir.into_path()
+                temp_dir.keep()
             });
 
             start_solana_validator(&dir, vec![], show_logs).await?;
