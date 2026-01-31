@@ -1,10 +1,11 @@
-import { Connection } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../idl/qcash_program.json';
 import type { SolanaPrograms } from '../idl/solana_programs';
 import { Buffer } from 'buffer';
 
 const RPC_URL = "http://127.0.0.1:8899";
+const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
 
 // UTXO Status based on voting
 export type UtxoStatus = 'finalized' | 'pending' | 'voted';
@@ -63,6 +64,26 @@ function determineUtxoStatus(votes: any): { status: UtxoStatus; voteCount: numbe
     }
 }
 
+function isGenesisHash(hash: number[] | Uint8Array): boolean {
+    return Array.from(hash).every(byte => byte === 0);
+}
+
+function deriveUtxoPda(utxoHash: Uint8Array): PublicKey {
+    const [pda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("utxo"), utxoHash],
+        PROGRAM_ID
+    );
+    return pda;
+}
+
+function deriveLedgerPda(): PublicKey {
+    const [pda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("ledger")],
+        PROGRAM_ID
+    );
+    return pda;
+}
+
 // Create a read-only provider for syncing
 function createReadOnlyProvider(connection: Connection): anchor.AnchorProvider {
     return new anchor.AnchorProvider(connection, {} as any, {
@@ -71,6 +92,8 @@ function createReadOnlyProvider(connection: Connection): anchor.AnchorProvider {
 }
 
 // Shared sync function that can be used by both frontend hook and background
+// Uses linked list traversal: starts from ledger head, follows prevUtxoHash
+// Stops when finding a finalized return UTXO or reaching genesis
 export async function syncUtxos(
     secretKey: Uint8Array,
     tryDecryptUtxo: (secretKey: Uint8Array, ciphertext: Uint8Array, nonce: Uint8Array, payload: Uint8Array, index: number) => any
@@ -79,60 +102,106 @@ export async function syncUtxos(
     const provider = createReadOnlyProvider(connection);
     const program = new anchor.Program<SolanaPrograms>(idl as SolanaPrograms, provider);
 
-    // Fetch all UTXOs via getProgramAccounts
-    console.log("Sync: Fetching UTXO accounts...");
-    const utxoAccounts = await program.account.utxo.all();
-    console.log(`Sync: Found ${utxoAccounts.length} UTXOs`);
+    // Fetch Ledger to get chain head
+    const ledgerPda = deriveLedgerPda();
+    console.log("Sync: Fetching ledger");
+
+    const ledger = await program.account.ledger.fetch(ledgerPda);
+    const headHash = new Uint8Array(ledger.lastValidUtxoHash);
+
+    console.log(`Sync: Ledger tip hash: ${Buffer.from(headHash).toString('hex').slice(0, 16)}...`);
+
+    // Check if ledger is empty (genesis state)
+    if (isGenesisHash(headHash)) {
+        console.log("Sync: Ledger is empty (genesis state)");
+        return {
+            utxos: [],
+            confirmedBalance: 0,
+            pendingBalance: 0,
+            totalBalance: 0
+        };
+    }
 
     const myUtxos: DecryptedUtxo[] = [];
+    let currentHash = headHash;
+    let index = 0;
+    let shouldStop = false;
 
-    for (let i = 0; i < utxoAccounts.length; i++) {
-        const accountInfo = utxoAccounts[i];
-        const rawUtxo = accountInfo.account;
+    // Traverse linked list from head (newest) to tail (oldest)
+    while (!isGenesisHash(currentHash) && !shouldStop) {
+        const utxoPda = deriveUtxoPda(currentHash);
 
         try {
-            const ciphertext = Uint8Array.from(rawUtxo.kyberCiphertext);
-            const nonce = Uint8Array.from(rawUtxo.nonce);
-            const payload = Uint8Array.from(rawUtxo.encryptedPayload);
+            const rawUtxo = await program.account.utxo.fetch(utxoPda);
 
-            const decrypted = tryDecryptUtxo(secretKey, ciphertext, nonce, payload, i);
+            // Try to decrypt this UTXO
+            try {
+                const ciphertext = Uint8Array.from(rawUtxo.kyberCiphertext);
+                const nonce = Uint8Array.from(rawUtxo.nonce);
+                const payload = Uint8Array.from(rawUtxo.encryptedPayload);
 
-            // Reconstruct spent list
-            const flatList = Array.from(decrypted.utxo_spent_list) as number[];
-            const reconstructedList: number[][] = [];
-            for (let j = 0; j < decrypted.spent_list_len; j++) {
-                const start = j * 32;
-                const end = start + 32;
-                reconstructedList.push(flatList.slice(start, end));
+                const decrypted = tryDecryptUtxo(secretKey, ciphertext, nonce, payload, index);
+
+                // Reconstruct spent list
+                const flatList = Array.from(decrypted.utxo_spent_list) as number[];
+                const reconstructedList: number[][] = [];
+                for (let j = 0; j < decrypted.spent_list_len; j++) {
+                    const start = j * 32;
+                    const end = start + 32;
+                    reconstructedList.push(flatList.slice(start, end));
+                }
+
+                // Determine status from votes
+                const { status, voteCount } = determineUtxoStatus(rawUtxo.votes);
+                const utxoHashHex = Buffer.from(rawUtxo.utxoHash).toString('hex');
+
+                const decryptedUtxo: DecryptedUtxo = {
+                    amount: Number(decrypted.amount),
+                    isReturn: decrypted.is_return,
+                    randomness: Array.from(decrypted.randomness),
+                    index,
+                    utxoHashHex,
+                    utxoSpentList: reconstructedList,
+                    status,
+                    voteCount,
+                    header: {
+                        utxoHash: Array.from(rawUtxo.utxoHash),
+                        prevUtxoHash: Array.from(rawUtxo.prevUtxoHash),
+                        ciphertextCommitment: Array.from(rawUtxo.ciphertextCommitment),
+                        epoch: rawUtxo.epoch,
+                        kyberCiphertext: Array.from(rawUtxo.kyberCiphertext),
+                        nonce: Array.from(rawUtxo.nonce)
+                    }
+                };
+
+                myUtxos.push(decryptedUtxo);
+
+                // Stop condition: finalized (votes=null) AND is_return=true
+                // This means we've found our last confirmed return UTXO
+                if (status === 'finalized' && decrypted.is_return) {
+                    console.log(`Sync: Found finalized return UTXO at index ${index}, stopping traversal`);
+                    shouldStop = true;
+                }
+
+            } catch (e) {
+                // Decryption failed = Not our UTXO, continue traversal
             }
 
-            // Determine status from votes
-            const { status, voteCount } = determineUtxoStatus(rawUtxo.votes);
-            const utxoHashHex = Buffer.from(rawUtxo.utxoHash).toString('hex');
-
-            myUtxos.push({
-                amount: Number(decrypted.amount),
-                isReturn: decrypted.is_return,
-                randomness: Array.from(decrypted.randomness),
-                index: i,
-                utxoHashHex,
-                utxoSpentList: reconstructedList,
-                status,
-                voteCount,
-                header: {
-                    utxoHash: Array.from(rawUtxo.utxoHash),
-                    prevUtxoHash: Array.from(rawUtxo.prevUtxoHash),
-                    ciphertextCommitment: Array.from(rawUtxo.ciphertextCommitment),
-                    epoch: rawUtxo.epoch,
-                    kyberCiphertext: Array.from(rawUtxo.kyberCiphertext),
-                    nonce: Array.from(rawUtxo.nonce)
-                }
-            });
+            // Move to previous UTXO in chain
+            currentHash = new Uint8Array(rawUtxo.prevUtxoHash);
+            index++;
 
         } catch (e) {
-            // Decryption failed = Not our UTXO. Ignore.
+            // UTXO account not found, this shouldn't happen in a valid chain
+            console.error(`Sync: Failed to fetch UTXO at hash ${Buffer.from(currentHash).toString('hex').slice(0, 16)}...`);
+            break;
         }
     }
+
+    // Reverse to get chronological order (oldest first)
+    myUtxos.reverse();
+    // Update indices to reflect chronological order
+    myUtxos.forEach((u, i) => u.index = i);
 
     // Calculate balances
     const confirmedBalance = myUtxos
