@@ -7,7 +7,7 @@ use futures::{StreamExt, stream};
 use interface::{PROGRAM_ID, accounts, instructions, submit_attestation};
 use qcash::QcashEvent;
 use risc0_zkvm::Receipt;
-use sha3::{Digest, Keccak256};
+use sha2::{Digest, Sha256};
 use solana_client::{
     nonblocking::rpc_client::RpcClient,
     rpc_config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter},
@@ -164,7 +164,7 @@ impl SolanaKeyManager {
 
     /// Get SHA256 hash of the next key
     pub fn next_key_hash(&self) -> Vec<u8> {
-        let mut hasher = Keccak256::new();
+        let mut hasher = Sha256::new();
         hasher.update(self.next_key.pubkey().as_ref());
         hasher.finalize().to_vec()
     }
