@@ -8,4 +8,5 @@ members = [
     "methods/guest",
     "node",
     "wasm",
+    "xtask",
 ]
