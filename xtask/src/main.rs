@@ -266,11 +266,12 @@ pub async fn start_solana_validator(
                 "--rpc-pubsub-enable-block-subscription",
                 "--bpf-program",
                 &interface::PROGRAM_ID.to_string(),
-                "solana-qssn/target/sbpf-solana-solana/release/solana_qssn.so",
+                "solana/target/sbpf-solana-solana/release/qcash.so",
                 "--quiet",
             ])
             .args(&account_args)
-            .stdout(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()?
     };
 
@@ -368,6 +369,7 @@ pub async fn start_node(
                 Ok(())
             })
             .env("RUST_LOG", "debug")
+            .env("JSON_LOG", "1")
             .env("SOLANA_CURRENT_KEY_FILE", solana_current_key)
             .env("SOLANA_NEXT_KEY_FILE", solana_next_key)
             .stdout(Stdio::piped())
@@ -399,7 +401,7 @@ pub async fn start_node(
                         }
 
                         // Check for login successful message
-                        if line.contains("Login successful!") {
+                        if line.contains("connected") {
                             if let Some(tx) = tx.take() {
                                 let _ = tx.send(());
                             }
@@ -422,7 +424,7 @@ pub async fn start_node(
     });
 
     // Wait for login successful message or timeout
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(60);
     let login_result = tokio::time::timeout(timeout, rx).await;
 
     match login_result {
@@ -579,7 +581,7 @@ async fn start_test_environment(
                 prover_pubkey: solana_keys.0.keypair.pubkey(),
             },
             instructions::RegisterProver {
-                unique_id: i as u64,
+                unique_id: i as u64 + 1,
                 next_key_hash,
             },
         );
