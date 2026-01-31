@@ -37,7 +37,6 @@ struct Cli {
     verbose: bool,
 }
 
-// add a build-extension action that will cd to extension and do npm install and npm build. AI!
 #[derive(Subcommand)]
 enum Commands {
     /// Start a complete test environment (validator, server, node)
@@ -66,6 +65,8 @@ enum Commands {
     BuildNode,
     /// Build the smart contract
     BuildSmartContract,
+    /// Build the browser extension
+    BuildExtension,
     /// Start Qcash node (uses generated test keys)
     StartNode {
         /// Show node logs
@@ -220,6 +221,47 @@ pub async fn build_node() -> Result<()> {
     if !build_output.status.success() {
         return Err(anyhow::anyhow!(
             "Qcash node build failed: {}",
+            String::from_utf8_lossy(&build_output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
+/// Build browser extension
+pub async fn build_extension() -> Result<()> {
+    use tokio::process::Command;
+
+    info!("Building browser extension...");
+    
+    // Run npm install
+    info!("Running npm install...");
+    let install_output = Command::new("npm")
+        .args(&["install"])
+        .current_dir("extension")
+        .output()
+        .await
+        .context("Failed to run npm install")?;
+
+    if !install_output.status.success() {
+        return Err(anyhow::anyhow!(
+            "npm install failed: {}",
+            String::from_utf8_lossy(&install_output.stderr)
+        ));
+    }
+
+    // Run npm run build
+    info!("Running npm run build...");
+    let build_output = Command::new("npm")
+        .args(&["run", "build"])
+        .current_dir("extension")
+        .output()
+        .await
+        .context("Failed to run npm run build")?;
+
+    if !build_output.status.success() {
+        return Err(anyhow::anyhow!(
+            "npm run build failed: {}",
             String::from_utf8_lossy(&build_output.stderr)
         ));
     }
@@ -636,6 +678,9 @@ async fn main() -> Result<()> {
         }
         Commands::BuildSmartContract => {
             build_smart_contract().await?;
+        }
+        Commands::BuildExtension => {
+            build_extension().await?;
         }
         Commands::StartNode {
             show_logs,
