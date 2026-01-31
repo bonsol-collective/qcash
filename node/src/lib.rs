@@ -20,11 +20,12 @@ use solana_sdk::{
 use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, error, info, warn};
 
-// Guest ID: [3123149550, 2958403742, 1163198136, 2906478055, 1985551465, 1662932468, 127326852, 1286749865]
+// Guest ID: [4210644281, 3059778711, 2026232224, 713154289, 1347314078, 1484885349, 3516267778, 2143507687]
 // Converted to [u8; 32] using little-endian byte order
 pub const IMAGE_ID: [u8; 32] = [
-    127, 44, 174, 85, 213, 14, 167, 223, 46, 79, 95, 39, 209, 68, 82, 95, 37, 120, 61, 89, 212, 94,
-    103, 53, 174, 150, 40, 72, 59, 19, 163, 255,
+    57, 85, 249, 250, 151, 132, 96, 182, 160, 217, 197, 120,
+    241, 222, 129, 42, 158, 97, 78, 80, 101, 141, 129, 88,
+    2, 253, 149, 209, 231, 84, 195, 127,
 ];
 
 /// Solana Key Manager for handling key rotation and management
@@ -259,7 +260,7 @@ impl QcashNode {
         Ok(QcashNode {
             key_manager: Mutex::new(key_manager),
             websocket_url: config.websocket_url,
-            rpc_client: RpcClient::new(config.rpc_url),
+            rpc_client: RpcClient::new_with_commitment(config.rpc_url, CommitmentConfig::confirmed()),
         })
     }
 

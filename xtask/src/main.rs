@@ -859,9 +859,11 @@ async fn start_test_environment(
     let mut node_solana_keys = Vec::new();
     for _i in 0..number_of_nodes {
         let solana_keys = create_test_solana_keys().await?;
-        let pubkey = solana_keys.0.keypair.pubkey();
+        let current_pubkey = solana_keys.0.keypair.pubkey();
+        let next_pubkey = solana_keys.1.keypair.pubkey();
+        validator_accounts.push(SolanaAccount::new_with_lamports(current_pubkey, LAMPORTS_PER_SOL)?);
+        validator_accounts.push(SolanaAccount::new_with_lamports(next_pubkey, LAMPORTS_PER_SOL)?);
         node_solana_keys.push(solana_keys);
-        validator_accounts.push(SolanaAccount::new_with_lamports(pubkey, LAMPORTS_PER_SOL)?);
     }
 
     // Start validator
