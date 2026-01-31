@@ -436,8 +436,55 @@ async fn main() -> Result<()> {
             show_logs,
             keys_dir,
         } => {
-            // use temp_dir() to generate a temp directory if keys_dir is none, then call the keys some static name, whatever you want and concat with the dir... and implement the actual running of the node. AI!
             info!("Starting Qcash node...");
+            
+            // Generate temp directory if keys_dir is None
+            let keys_path = if let Some(dir) = keys_dir {
+                dir
+            } else {
+                let temp_dir = tempdir()?;
+                temp_dir.into_path()
+            };
+
+            // Create key file paths
+            let current_key_path = keys_path.join("current_key.json");
+            let next_key_path = keys_path.join("next_key.json");
+
+            // Ensure the directory exists
+            std::fs::create_dir_all(&keys_path)?;
+
+            // Generate test keys if they don't exist
+            if !current_key_path.exists() {
+                info!("Generating test Solana keys...");
+                use tokio::process::Command;
+                
+                // Generate current key
+                let current_output = Command::new("solana-keygen")
+                    .args(&["new", "-f", current_key_path.to_str().unwrap(), "--no-bip39-passphrase"])
+                    .output()
+                    .await?;
+                
+                if !current_output.status.success() {
+                    return Err(anyhow::anyhow!("Failed to generate current key"));
+                }
+
+                // Generate next key
+                let next_output = Command::new("solana-keygen")
+                    .args(&["new", "-f", next_key_path.to_str().unwrap(), "--no-bip39-passphrase"])
+                    .output()
+                    .await?;
+
+                if !next_output.status.success() {
+                    return Err(anyhow::anyhow!("Failed to generate next key"));
+                }
+            }
+
+            // Start the node
+            start_qfire_node(
+                current_key_path.to_str().unwrap(),
+                next_key_path.to_str().unwrap(),
+                show_logs,
+            ).await?;
         }
         Commands::StartValidator {
             validator_dir,
