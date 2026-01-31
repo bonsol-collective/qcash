@@ -464,9 +464,7 @@ pub async fn build_smart_contract() -> Result<()> {
 async fn start_test_environment(
     validator_dir: Option<PathBuf>,
     show_solana_logs: bool,
-    show_server_logs: bool,
     show_node_logs: bool,
-    cert_dir: Option<PathBuf>,
     number_of_nodes: usize,
 ) -> Result<()> {
     info!("Starting complete test environment...");
@@ -569,7 +567,7 @@ async fn start_test_environment(
     );
     send_transaction(&rpc_client, &owner, &[initialize_ledger]).await?;
 
-    // Create root prover data for all nodes
+    // Add nodes
     for (i, solana_keys) in node_solana_keys.iter().enumerate() {
         let next_key_hash = calculate_keccak_hash(&solana_keys.1.keypair.pubkey().to_bytes());
         let register_prover = interface::register_prover(
@@ -585,6 +583,7 @@ async fn start_test_environment(
                 next_key_hash,
             },
         );
+        send_transaction(&rpc_client, &owner, &[register_prover]).await?;
     }
 
     info!("Test environment is running. Press Ctrl+C to stop.");
@@ -685,7 +684,7 @@ async fn main() -> Result<()> {
             number_of_nodes,
             show_solana_logs,
             show_node_logs,
-        } => {}
+        } => {} //implement this. AI!
     }
 
     Ok(())
