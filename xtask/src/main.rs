@@ -288,10 +288,11 @@ pub async fn build_extension() -> Result<()> {
     Ok(())
 }
 
+// add a function to build and run the faucet... that is in qcash-faucet/backend-ts and qcash-faucet/frontend... do npm install and npm run dev to each. AI!
+
 /// Install Chrome extension
 pub async fn install_extension() -> Result<()> {
     // Build the extension first, just in case
-    info!("Building extension before installation...");
     build_extension().await?;
 
     // Display formatted instructions
