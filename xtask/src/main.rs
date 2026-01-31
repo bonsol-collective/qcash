@@ -249,7 +249,21 @@ pub async fn build_wasm() -> Result<()> {
         ));
     }
 
-    // now run wasm-pack build --target nodejs --out-dir pkg-node . AI!
+    // Build for Node.js environment
+    info!("Building wasm for Node.js with wasm-pack...");
+    let wasm_node_build_output = Command::new("wasm-pack")
+        .args(&["build", "--target", "nodejs", "--out-dir", "pkg-node"])
+        .current_dir("wasm")
+        .output()
+        .await
+        .context("Failed to build wasm for Node.js with wasm-pack")?;
+
+    if !wasm_node_build_output.status.success() {
+        return Err(anyhow::anyhow!(
+            "wasm-pack nodejs build failed: {}",
+            String::from_utf8_lossy(&wasm_node_build_output.stderr)
+        ));
+    }
 
     Ok(())
 }
