@@ -232,12 +232,8 @@ pub async fn build_node() -> Result<()> {
     Ok(())
 }
 
-/// Build browser extension
-pub async fn build_extension() -> Result<()> {
-    info!("Building browser extension...");
-
-    // move build wasm to a separate function (but dont add a command for it). AI!
-    // Build the wasm directory
+/// Build wasm with wasm-pack
+pub async fn build_wasm() -> Result<()> {
     info!("Building wasm with wasm-pack...");
     let wasm_build_output = Command::new("wasm-pack")
         .args(&["build", "--target", "web"])
@@ -252,6 +248,16 @@ pub async fn build_extension() -> Result<()> {
             String::from_utf8_lossy(&wasm_build_output.stderr)
         ));
     }
+
+    Ok(())
+}
+
+/// Build browser extension
+pub async fn build_extension() -> Result<()> {
+    info!("Building browser extension...");
+
+    // Build the wasm directory
+    build_wasm().await?;
 
     // Run npm install
     info!("Running npm install...");
