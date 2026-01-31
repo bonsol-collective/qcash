@@ -70,6 +70,8 @@ enum Commands {
     BuildExtension,
     /// Install the Chrome extension
     InstallExtension,
+    /// Build and run the faucet (backend and frontend)
+    RunFaucet,
     /// Start Qcash node (uses generated test keys)
     StartNode {
         /// Show node logs
@@ -288,7 +290,136 @@ pub async fn build_extension() -> Result<()> {
     Ok(())
 }
 
-// add a function to build and run the faucet... that is in qcash-faucet/backend-ts and qcash-faucet/frontend... do npm install and npm run dev to each. AI!
+/// Build and run the faucet (backend and frontend)
+pub async fn run_faucet() -> Result<()> {
+    use tokio::process::Command;
+    use std::process::Stdio;
+
+    info!("Starting faucet services...");
+
+    // Build and run backend
+    info!("Building and starting faucet backend...");
+    let backend_dir = "qcash-faucet/backend-ts";
+    
+    // Install backend dependencies
+    let backend_install = Command::new("npm")
+        .args(&["install"])
+        .current_dir(backend_dir)
+        .output()
+        .await
+        .context("Failed to install backend dependencies")?;
+
+    if !backend_install.status.success() {
+        return Err(anyhow::anyhow!(
+            "Backend npm install failed: {}",
+            String::from_utf8_lossy(&backend_install.stderr)
+        ));
+    }
+
+    // Start backend in background
+    let mut backend_process = Command::new("npm")
+        .args(&["run", "dev"])
+        .current_dir(backend_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("Failed to start faucet backend")?;
+
+    // Spawn task to log backend output
+    let backend_stdout = backend_process.stdout.take().unwrap();
+    let backend_stderr = backend_process.stderr.take().unwrap();
+    tokio::spawn(async move {
+        let stdout_reader = BufReader::new(backend_stdout);
+        let stderr_reader = BufReader::new(backend_stderr);
+        let mut stdout_lines = stdout_reader.lines();
+        let mut stderr_lines = stderr_reader.lines();
+
+        loop {
+            tokio::select! {
+                stdout_line = stdout_lines.next_line() => {
+                    if let Ok(Some(line)) = stdout_line {
+                        info!("[Faucet Backend] {}", line);
+                    }
+                },
+                stderr_line = stderr_lines.next_line() => {
+                    if let Ok(Some(line)) = stderr_line {
+                        info!("[Faucet Backend] {}", line);
+                    }
+                },
+                else => break,
+            }
+        }
+    });
+
+    // Build and run frontend
+    info!("Building and starting faucet frontend...");
+    let frontend_dir = "qcash-faucet/frontend";
+
+    // Install frontend dependencies
+    let frontend_install = Command::new("npm")
+        .args(&["install"])
+        .current_dir(frontend_dir)
+        .output()
+        .await
+        .context("Failed to install frontend dependencies")?;
+
+    if !frontend_install.status.success() {
+        return Err(anyhow::anyhow!(
+            "Frontend npm install failed: {}",
+            String::from_utf8_lossy(&frontend_install.stderr)
+        ));
+    }
+
+    // Start frontend in background
+    let mut frontend_process = Command::new("npm")
+        .args(&["run", "dev"])
+        .current_dir(frontend_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("Failed to start faucet frontend")?;
+
+    // Spawn task to log frontend output
+    let frontend_stdout = frontend_process.stdout.take().unwrap();
+    let frontend_stderr = frontend_process.stderr.take().unwrap();
+    tokio::spawn(async move {
+        let stdout_reader = BufReader::new(frontend_stdout);
+        let stderr_reader = BufReader::new(frontend_stderr);
+        let mut stdout_lines = stdout_reader.lines();
+        let mut stderr_lines = stderr_reader.lines();
+
+        loop {
+            tokio::select! {
+                stdout_line = stdout_lines.next_line() => {
+                    if let Ok(Some(line)) = stdout_line {
+                        info!("[Faucet Frontend] {}", line);
+                    }
+                },
+                stderr_line = stderr_lines.next_line() => {
+                    if let Ok(Some(line)) = stderr_line {
+                        info!("[Faucet Frontend] {}", line);
+                    }
+                },
+                else => break,
+            }
+        }
+    });
+
+    info!("Faucet services started successfully!");
+    info!("Backend: http://localhost:3000");
+    info!("Frontend: http://localhost:5173");
+    info!("Press Ctrl+C to stop all services");
+
+    // Wait for Ctrl+C
+    tokio::signal::ctrl_c().await?;
+
+    // Clean up processes
+    info!("Shutting down faucet services...");
+    backend_process.kill().await?;
+    frontend_process.kill().await?;
+
+    Ok(())
+}
 
 /// Install Chrome extension
 pub async fn install_extension() -> Result<()> {
@@ -858,6 +989,9 @@ async fn main() -> Result<()> {
         }
         Commands::InstallExtension => {
             install_extension().await?;
+        }
+        Commands::RunFaucet => {
+            run_faucet().await?;
         }
         Commands::StartNode {
             show_logs,
