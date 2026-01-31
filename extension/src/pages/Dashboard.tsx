@@ -107,7 +107,7 @@ export default function Dashboard() {
                     <div className="w-full max-w-md grid grid-cols-2 gap-3">
                         {/* SOL Balance */}
                         <div className="bg-secondary/20 border border-border rounded-xl p-4">
-                            <div className="text-xs font-medium text-muted-foreground flex items-center gap-2 mb-1">
+                            <div className="text-xs font-medium text-muted-foreground flex items-center gap-2 mb-3 mt-2">
                                 <Wallet className="w-3.5 h-3.5" /> SOL Balance
                             </div>
                             <div className="font-mono font-bold text-xl text-foreground">
