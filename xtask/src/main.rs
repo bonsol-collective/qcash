@@ -1,32 +1,34 @@
 use std::{
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
+    process::Stdio,
     sync::Arc,
     time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
-use interface::{
-    accounts, instructions,
-    types::{Ledger, ProverInfo},
-};
+use colored::Colorize;
+use interface::{accounts, instructions};
 use serde::Serialize;
 use sha3::{Digest, Keccak256};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
-    commitment_config::CommitmentConfig, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey,
+    commitment_config::CommitmentConfig, native_token::LAMPORTS_PER_SOL, pubkey, pubkey::Pubkey,
     signature::Keypair, signer::Signer,
 };
 use tempfile::{NamedTempFile, tempdir};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
-    process::Child,
+    process::{Child, Command},
     select,
     sync::oneshot,
 };
 use tracing::{Level, info, warn};
 use tracing_subscriber::FmtSubscriber;
+
+const FAUCET_WALLET: &str = include_str!("../../qcash-faucet/faucet-wallet.json");
+const FAUCET_PUBKEY: Pubkey = pubkey!("43XSgRV3LPo3gWMVJYLHYnnEayVa5sbXT12zJ2uih4j7");
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -68,6 +70,12 @@ enum Commands {
     BuildNode,
     /// Build the smart contract
     BuildSmartContract,
+    /// Build the browser extension
+    BuildExtension,
+    /// Install the Chrome extension
+    InstallExtension,
+    /// Build and run the faucet (backend and frontend)
+    RunFaucet,
     /// Start Qcash node (uses generated test keys)
     StartNode {
         /// Show node logs
@@ -211,8 +219,6 @@ where
 
 /// Build Qcash node binary
 pub async fn build_node() -> Result<()> {
-    use tokio::process::Command;
-
     info!("Building Qcash node...");
     let build_output = Command::new("cargo")
         .args(&["build", "--bin", "node"])
@@ -229,15 +235,377 @@ pub async fn build_node() -> Result<()> {
     Ok(())
 }
 
+/// Build wasm with wasm-pack
+pub async fn build_wasm() -> Result<()> {
+    info!("Building wasm with wasm-pack...");
+    let wasm_build_output = Command::new("wasm-pack")
+        .args(&["build", "--target", "web"])
+        .current_dir("wasm")
+        .output()
+        .await
+        .context("Failed to build wasm with wasm-pack")?;
+
+    if !wasm_build_output.status.success() {
+        return Err(anyhow::anyhow!(
+            "wasm-pack build failed: {}",
+            String::from_utf8_lossy(&wasm_build_output.stderr)
+        ));
+    }
+
+    // Build for Node.js environment
+    info!("Building wasm for Node.js with wasm-pack...");
+    let wasm_node_build_output = Command::new("wasm-pack")
+        .args(&["build", "--target", "nodejs", "--out-dir", "pkg-node"])
+        .current_dir("wasm")
+        .output()
+        .await
+        .context("Failed to build wasm for Node.js with wasm-pack")?;
+
+    if !wasm_node_build_output.status.success() {
+        return Err(anyhow::anyhow!(
+            "wasm-pack nodejs build failed: {}",
+            String::from_utf8_lossy(&wasm_node_build_output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
+/// Build browser extension
+pub async fn build_extension() -> Result<()> {
+    info!("Building browser extension...");
+
+    // Build the wasm directory
+    build_wasm().await?;
+
+    // Run npm install
+    info!("Running npm install...");
+    let install_output = Command::new("npm")
+        .args(&["install"])
+        .current_dir("extension")
+        .output()
+        .await
+        .context("Failed to run npm install")?;
+
+    if !install_output.status.success() {
+        return Err(anyhow::anyhow!(
+            "npm install failed: {}",
+            String::from_utf8_lossy(&install_output.stderr)
+        ));
+    }
+
+    // Run npm run build
+    info!("Running npm run build...");
+    let build_output = Command::new("npm")
+        .args(&["run", "build"])
+        .current_dir("extension")
+        .output()
+        .await
+        .context("Failed to run npm run build")?;
+
+    if !build_output.status.success() {
+        return Err(anyhow::anyhow!(
+            "npm run build failed: {}",
+            String::from_utf8_lossy(&build_output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
+/// Build and run the faucet (backend and frontend)
+pub async fn run_faucet(wait: bool) -> Result<(Child, Child)> {
+    info!("Starting faucet services...");
+
+    // Build wasm
+    build_wasm().await?;
+
+    // Build and run backend
+    info!("Building and starting faucet backend...");
+    let backend_dir = "qcash-faucet/backend-ts";
+
+    // Install backend dependencies
+    let backend_install = Command::new("npm")
+        .args(&["install"])
+        .current_dir(backend_dir)
+        .output()
+        .await
+        .context("Failed to install backend dependencies")?;
+
+    if !backend_install.status.success() {
+        return Err(anyhow::anyhow!(
+            "Backend npm install failed: {}",
+            String::from_utf8_lossy(&backend_install.stderr)
+        ));
+    }
+
+    // Start backend in background
+    let mut backend_process = Command::new("npm")
+        .args(&["run", "dev"])
+        .current_dir(backend_dir)
+        .env("FAUCET_KEY", FAUCET_WALLET)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("Failed to start faucet backend")?;
+
+    // Spawn task to log backend output
+    let backend_stdout = backend_process.stdout.take().unwrap();
+    let backend_stderr = backend_process.stderr.take().unwrap();
+    tokio::spawn(async move {
+        let stdout_reader = BufReader::new(backend_stdout);
+        let stderr_reader = BufReader::new(backend_stderr);
+        let mut stdout_lines = stdout_reader.lines();
+        let mut stderr_lines = stderr_reader.lines();
+
+        loop {
+            tokio::select! {
+                stdout_line = stdout_lines.next_line() => {
+                    if let Ok(Some(line)) = stdout_line {
+                        info!(target: "Faucet Backend", "{}", line);
+                    }
+                },
+                stderr_line = stderr_lines.next_line() => {
+                    if let Ok(Some(line)) = stderr_line {
+                        info!(target: "Faucet Backend", "{}", line);
+                    }
+                },
+                else => break,
+            }
+        }
+    });
+
+    // Build and run frontend
+    info!("Building and starting faucet frontend...");
+    let frontend_dir = "qcash-faucet/frontend";
+
+    // Install frontend dependencies
+    let frontend_install = Command::new("npm")
+        .args(&["install"])
+        .current_dir(frontend_dir)
+        .output()
+        .await
+        .context("Failed to install frontend dependencies")?;
+
+    if !frontend_install.status.success() {
+        return Err(anyhow::anyhow!(
+            "Frontend npm install failed: {}",
+            String::from_utf8_lossy(&frontend_install.stderr)
+        ));
+    }
+
+    // Start frontend in background
+    let mut frontend_process = Command::new("npm")
+        .args(&["run", "dev"])
+        .current_dir(frontend_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("Failed to start faucet frontend")?;
+
+    // Spawn task to log frontend output
+    let frontend_stdout = frontend_process.stdout.take().unwrap();
+    let frontend_stderr = frontend_process.stderr.take().unwrap();
+    tokio::spawn(async move {
+        let stdout_reader = BufReader::new(frontend_stdout);
+        let stderr_reader = BufReader::new(frontend_stderr);
+        let mut stdout_lines = stdout_reader.lines();
+        let mut stderr_lines = stderr_reader.lines();
+
+        loop {
+            tokio::select! {
+                stdout_line = stdout_lines.next_line() => {
+                    if let Ok(Some(line)) = stdout_line {
+                        info!(target: "Faucet Frontend", "{}", line);
+                    }
+                },
+                stderr_line = stderr_lines.next_line() => {
+                    if let Ok(Some(line)) = stderr_line {
+                        info!(target: "Faucet Frontend", "{}", line);
+                    }
+                },
+                else => break,
+            }
+        }
+    });
+
+    info!("Faucet services started successfully!");
+    info!("Backend: http://localhost:3000");
+    info!("Frontend: http://localhost:5173");
+    info!("Press Ctrl+C to stop all services");
+
+    if wait {
+        // Wait for Ctrl+C
+        tokio::signal::ctrl_c().await?;
+
+        // Clean up processes
+        info!("Shutting down faucet services...");
+        backend_process.kill().await?;
+        frontend_process.kill().await?;
+    }
+
+    Ok((backend_process, frontend_process))
+}
+
+/// Install Chrome extension
+pub async fn install_extension() -> Result<()> {
+    // Build the extension first, just in case
+    build_extension().await?;
+
+    // Display formatted instructions
+    println!("\n{}", "=".repeat(60));
+    println!(
+        "{}",
+        "Chrome Extension Installation Instructions".bold().cyan()
+    );
+    println!("{}", "=".repeat(60));
+    println!();
+    println!(
+        "{}",
+        "1. Open Google Chrome and navigate to:".bold().yellow()
+    );
+    println!("   {}", "chrome://extensions".cyan());
+    println!();
+    println!("{}", "2. Enable Developer mode:".bold().yellow());
+    println!("   {}", "Toggle the switch in the top right corner".cyan());
+    println!();
+    println!("{}", "3. Click 'Load unpacked':".bold().yellow());
+    println!("   {}", "Select the extension/dist folder".cyan());
+    println!();
+    println!("{}", "4. Note the Extension ID:".bold().yellow());
+    println!(
+        "   {}",
+        "Copy the ID displayed in the extension card".cyan()
+    );
+    println!();
+    println!("{}", "=".repeat(60));
+    println!();
+
+    // Prompt for extension ID
+    print!("{}", "Enter the Chrome Extension ID: ".bold().green());
+    io::stdout().flush()?;
+
+    let mut extension_id = String::new();
+    io::stdin().read_line(&mut extension_id)?;
+    let extension_id = extension_id.trim();
+
+    if extension_id.is_empty() {
+        return Err(anyhow::anyhow!("Extension ID cannot be empty"));
+    }
+
+    // Get absolute path to daemon binary
+    let daemon_path = std::env::current_dir()?
+        .join("target")
+        .join("debug")
+        .join("daemon")
+        .to_string_lossy()
+        .to_string();
+
+    println!();
+    println!(
+        "{} {}",
+        "Using daemon path:".bold().green(),
+        daemon_path.cyan()
+    );
+    println!(
+        "{} {}",
+        "Using extension ID:".bold().green(),
+        extension_id.cyan()
+    );
+    println!();
+
+    // Load and parse com.qcash.daemon.json
+    let config_path = Path::new("com.qcash.daemon.json");
+    if !config_path.exists() {
+        return Err(anyhow::anyhow!(
+            "com.qcash.daemon.json not found in current directory"
+        ));
+    }
+
+    let config_content = std::fs::read_to_string(config_path)?;
+    let mut config: serde_json::Value = serde_json::from_str(&config_content)?;
+
+    // Update allowed_origins
+    if let Some(obj) = config.as_object_mut() {
+        if let Some(allowed_origins) = obj
+            .get_mut("allowed_origins")
+            .and_then(|v| v.as_array_mut())
+        {
+            allowed_origins.clear();
+            allowed_origins.push(serde_json::Value::String(format!(
+                "chrome-extension://{}/",
+                extension_id
+            )));
+        }
+
+        // Update path
+        obj.insert(
+            "path".to_string(),
+            serde_json::Value::String(daemon_path.clone()),
+        );
+    }
+
+    let updated_config = serde_json::to_string_pretty(&config)?;
+
+    // Determine the Chrome NativeMessagingHosts directory based on the OS
+    let native_messaging_dir = if cfg!(target_os = "linux") {
+        // Linux: ~/.config/google-chrome/NativeMessagingHosts
+        let home_dir = std::env::var("HOME").context("HOME environment variable not set")?;
+        Path::new(&home_dir)
+            .join(".config")
+            .join("google-chrome")
+            .join("NativeMessagingHosts")
+    } else if cfg!(target_os = "macos") {
+        // macOS: ~/Library/Application Support/Google/Chrome/NativeMessagingHosts
+        let home_dir = std::env::var("HOME").context("HOME environment variable not set")?;
+        Path::new(&home_dir)
+            .join("Library")
+            .join("Application Support")
+            .join("Google")
+            .join("Chrome")
+            .join("NativeMessagingHosts")
+    } else if cfg!(target_os = "windows") {
+        // Windows: %LOCALAPPDATA%\Google\Chrome\User Data\Default\NativeMessagingHosts
+        let local_app_data =
+            std::env::var("LOCALAPPDATA").context("LOCALAPPDATA environment variable not set")?;
+        Path::new(&local_app_data)
+            .join("Google")
+            .join("Chrome")
+            .join("User Data")
+            .join("Default")
+            .join("NativeMessagingHosts")
+    } else {
+        return Err(anyhow::anyhow!(
+            "Unsupported operating system for Chrome NativeMessagingHosts"
+        ));
+    };
+
+    // Create the directory if it doesn't exist
+    std::fs::create_dir_all(&native_messaging_dir).context(format!(
+        "Failed to create directory: {:?}",
+        native_messaging_dir
+    ))?;
+
+    // Write the updated config to the NativeMessagingHosts directory
+    let target_path = native_messaging_dir.join("com.qcash.daemon.json");
+    std::fs::write(&target_path, &updated_config)
+        .context(format!("Failed to write config to: {:?}", target_path))?;
+
+    println!(
+        "{}",
+        "✅ Configuration updated successfully!".bold().green()
+    );
+    println!("{} {:?}", "Config written to:".bold().green(), target_path);
+
+    Ok(())
+}
+
 /// Start Solana test validator with optional accounts
 pub async fn start_solana_validator(
     validator_dir: &std::path::Path,
     mut accounts: Vec<SolanaAccount>,
     show_logs: bool,
 ) -> Result<Child> {
-    use std::process::Stdio;
-    use tokio::process::Command;
-
     info!("Starting Solana test validator...");
 
     // Save all accounts and collect their paths
@@ -325,14 +693,14 @@ pub async fn start_solana_validator(
                     select! {
                         stdout_line = stdout_lines.next_line() => {
                             if let Ok(Some(line)) = stdout_line {
-                                info!("Solana logs: {}", line);
+                            info!(target: "Solana", "{}", line);
                             } else {
                                 break;
                             }
                         },
                         stderr_line = stderr_lines.next_line() => {
                             if let Ok(Some(line)) = stderr_line {
-                                info!("Solana logs stderr: {}", line);
+                            info!(target: "Solana", "{}", line);
                             } else {
                                 break;
                             }
@@ -355,9 +723,6 @@ pub async fn start_node(
     solana_next_key: &str,
     show_logs: bool,
 ) -> Result<Child> {
-    use std::process::Stdio;
-    use tokio::process::Command;
-
     info!("Starting Qfire node...");
 
     let mut node_cmd = unsafe {
@@ -369,7 +734,6 @@ pub async fn start_node(
                 Ok(())
             })
             .env("RUST_LOG", "debug")
-            .env("JSON_LOG", "1")
             .env("SOLANA_CURRENT_KEY_FILE", solana_current_key)
             .env("SOLANA_NEXT_KEY_FILE", solana_next_key)
             .stdout(Stdio::piped())
@@ -397,7 +761,7 @@ pub async fn start_node(
                 stdout_line = stdout_lines.next_line() => {
                     if let Ok(Some(line)) = stdout_line {
                         if show_logs {
-                            info!("Client stdout: {}", line);
+                            println!("{}", line);
                         }
 
                         // Check for login successful message
@@ -413,7 +777,7 @@ pub async fn start_node(
                 stderr_line = stderr_lines.next_line() => {
                     if let Ok(Some(line)) = stderr_line {
                         if show_logs {
-                            info!("Client stderr: {}", line);
+                            println!("{}", line);
                         }
                     } else {
                         break;
@@ -443,8 +807,6 @@ pub async fn start_node(
 }
 
 pub async fn build_smart_contract() -> Result<()> {
-    use tokio::process::Command;
-
     info!("Building smart contract...");
     let build_output = Command::new("anchor")
         .args(&["build"])
@@ -487,11 +849,11 @@ async fn start_test_environment(
     // Create owner keypair
     let owner = Arc::new(Keypair::new());
 
-    // Fund the owner account
-    let mut validator_accounts = vec![SolanaAccount::new_with_lamports(
-        owner.pubkey(),
-        LAMPORTS_PER_SOL,
-    )?];
+    // Fund the owner and the faucet accounts
+    let mut validator_accounts = vec![
+        SolanaAccount::new_with_lamports(owner.pubkey(), LAMPORTS_PER_SOL)?,
+        SolanaAccount::new_with_lamports(FAUCET_PUBKEY, LAMPORTS_PER_SOL)?,
+    ];
 
     // Generate keys for all nodes before starting validator
     let mut node_solana_keys = Vec::new();
@@ -588,6 +950,8 @@ async fn start_test_environment(
         send_transaction(&rpc_client, &owner, &[register_prover]).await?;
     }
 
+    let (mut faucet_backend, mut faucet_frontend) = run_faucet(false).await?;
+
     info!("Test environment is running. Press Ctrl+C to stop.");
 
     // Wait for Ctrl+C
@@ -598,6 +962,8 @@ async fn start_test_environment(
     for mut node_process in node_processes {
         node_process.kill().await?;
     }
+    faucet_backend.kill().await?;
+    faucet_frontend.kill().await?;
     validator_process.kill().await?;
 
     Ok(())
@@ -629,6 +995,7 @@ async fn main() -> Result<()> {
         } else {
             Level::INFO
         })
+        .with_ansi(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber).context("Failed to set up logging")?;
 
@@ -638,6 +1005,15 @@ async fn main() -> Result<()> {
         }
         Commands::BuildSmartContract => {
             build_smart_contract().await?;
+        }
+        Commands::BuildExtension => {
+            build_extension().await?;
+        }
+        Commands::InstallExtension => {
+            install_extension().await?;
+        }
+        Commands::RunFaucet => {
+            run_faucet(true).await?;
         }
         Commands::StartNode {
             show_logs,

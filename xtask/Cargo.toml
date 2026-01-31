@@ -19,3 +19,4 @@ interface = { path = "../interface" }
 #qcash = { path = "../solana/programs/qcash" }
 solana-client = "2"
 sha3 = "0.10.8"
+colored = "3.1.1"
