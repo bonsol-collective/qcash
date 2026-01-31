@@ -314,6 +314,9 @@ pub async fn build_extension() -> Result<()> {
 pub async fn run_faucet(wait: bool) -> Result<(Child, Child)> {
     info!("Starting faucet services...");
 
+    // Build wasm
+    build_wasm().await?;
+
     // Build and run backend
     info!("Building and starting faucet backend...");
     let backend_dir = "qcash-faucet/backend-ts";
