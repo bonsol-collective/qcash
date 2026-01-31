@@ -19,12 +19,12 @@ use solana_sdk::{
 };
 use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, error, info, warn};
+use hex;
 
-// Guest ID: [3123149550, 2958403742, 1163198136, 2906478055, 1985551465, 1662932468, 127326852, 1286749865]
+// Guest ID: [1437478015, 3752267477, 660557614, 1599227089, 1497200677, 895966932, 1210619566, 4288877371]
 // Converted to [u8; 32] using little-endian byte order
 pub const IMAGE_ID: [u8; 32] = [
-    238, 122, 39, 186, 158, 168, 85, 176, 184, 254, 84, 69, 231, 85, 61, 173,
-    105, 28, 89, 118, 244, 85, 30, 99, 132, 218, 150, 7, 169, 62, 178, 76
+    127, 44, 174, 85, 213, 14, 167, 223, 46, 79, 95, 39, 209, 68, 82, 95, 37, 120, 61, 89, 212, 94, 103, 53, 174, 150, 40, 72, 59, 19, 163, 255
 ];
 
 /// Solana Key Manager for handling key rotation and management
@@ -162,9 +162,10 @@ impl SolanaKeyManager {
         &self.current_key
     }
 
-    /// Get SHA256 hash of the next key
+    /// Get SHA256 hash of the next key (matches Solana program's hash function)
     pub fn next_key_hash(&self) -> Vec<u8> {
-        let mut hasher = Keccak256::new();
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
         hasher.update(self.next_key.pubkey().as_ref());
         hasher.finalize().to_vec()
     }
@@ -315,15 +316,59 @@ impl QcashNode {
         utxo: &Pubkey,
         utxo_hash: [u8; 32],
     ) -> Result<()> {
-        let proof_data = self
-            .rpc_client
-            .get_account_data(zk_proof)
-            .await
-            .map_err(|e| anyhow!("Failed to download proof: {}", e))?;
+        // Wait for ZkProof to be fully uploaded (poll until bytes_written == total_len)
+        let max_retries = 30;
+        let retry_delay = Duration::from_millis(500);
+        
+        let proof_data = loop {
+            let data = self
+                .rpc_client
+                .get_account_data(zk_proof)
+                .await
+                .map_err(|e| anyhow!("Failed to download proof: {}", e))?;
+            
+            if data.len() < 16 {
+                return Err(anyhow!("ZkProof account too small: {} bytes", data.len()));
+            }
+            
+            // Read header: bytes 8-11 = total_len, bytes 12-15 = bytes_written
+            let total_len = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
+            let bytes_written = u32::from_le_bytes([data[12], data[13], data[14], data[15]]);
+            
+            info!("ZkProof status: bytes_written={} / total_len={}", bytes_written, total_len);
+            
+            if bytes_written >= total_len {
+                info!("ZkProof fully uploaded");
+                break data;
+            }
+            
+            // Not fully uploaded yet, wait and retry
+            static RETRY_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let count = RETRY_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count >= max_retries {
+                RETRY_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
+                return Err(anyhow!("ZkProof not fully uploaded after {} retries", max_retries));
+            }
+            
+            info!("Waiting for proof upload to complete... (retry {})", count + 1);
+            tokio::time::sleep(retry_delay).await;
+        };
+
+        info!("ZkProof account total size: {} bytes", proof_data.len());
+        info!("ZkProof header (first 16): {:?}", &proof_data[..16]);
+        
+        let proof_bytes = &proof_data[16..];
+        info!("Proof data size: {} bytes", proof_bytes.len());
+        info!("Proof first 32 bytes: {:?}", &proof_bytes[..32.min(proof_bytes.len())]);
+        if proof_bytes.len() > 32 {
+            info!("Proof last 32 bytes: {:?}", &proof_bytes[proof_bytes.len().saturating_sub(32)..]);
+        }
 
         // ZkProof header: 8 (discriminator) + 4 (total_len) + 4 (bytes_written) = 16 bytes
         let receipt: Receipt =
-            bincode::deserialize(&proof_data[16..]).map_err(|e| anyhow!("Can't parse proof: {}", e))?;
+            bincode::deserialize(proof_bytes).map_err(|e| anyhow!("Can't parse proof: {}", e))?;
+        
+        info!("Deserialized Receipt: {:?}", receipt);
 
         let key_manager = self.key_manager.lock().await;
         let next_key_hash = key_manager.next_key_hash().try_into().unwrap();
@@ -336,18 +381,44 @@ impl QcashNode {
             true
         };
 
-        let recent_blockhash = self.rpc_client.get_latest_blockhash().await?;
-        let tx = create_submit_attestation_transaction(
-            &key_manager.current_key(),
-            &key_manager.previous_key(),
-            next_key_hash,
-            utxo,
-            utxo_hash,
-            vote,
-            recent_blockhash,
-        )?;
-        self.rpc_client.send_and_confirm_transaction(&tx).await?;
-
+        // Retry loop to handle UTXO account propagation delay
+        let max_retries = 10;
+        let retry_delay = Duration::from_millis(500);
+        
+        for attempt in 1..=max_retries {
+            let recent_blockhash = self.rpc_client.get_latest_blockhash().await?;
+            let tx = create_submit_attestation_transaction(
+                &key_manager.current_key(),
+                &key_manager.previous_key(),
+                next_key_hash,
+                utxo,
+                utxo_hash,
+                vote,
+                recent_blockhash,
+            )?;
+            
+            match self.rpc_client.send_and_confirm_transaction(&tx).await {
+                Ok(_) => {
+                    info!("SubmitAttestation succeeded on attempt {}", attempt);
+                    return Ok(());
+                }
+                Err(e) => {
+                    let error_str = e.to_string();
+                    // Check if it's the AccountNotInitialized error (0xbc4 = 3012)
+                    if error_str.contains("0xbc4") || error_str.contains("3012") || error_str.contains("AccountNotInitialized") {
+                        if attempt < max_retries {
+                            info!("UTXO account not yet visible, retrying in {}ms (attempt {}/{})", 
+                                  retry_delay.as_millis(), attempt, max_retries);
+                            tokio::time::sleep(retry_delay).await;
+                            continue;
+                        }
+                    }
+                    // For other errors or max retries exceeded, return the error
+                    return Err(anyhow!("SubmitAttestation failed after {} attempts: {}", attempt, e));
+                }
+            }
+        }
+        
         Ok(())
     }
 }
@@ -364,6 +435,20 @@ fn create_submit_attestation_transaction(
     let (prover_registry_pda, _bump) =
         accounts::SubmitAttestation::prover_registry_pda(&PROGRAM_ID);
     let (ledger_pda, _bump) = accounts::SubmitAttestation::ledger_pda(&PROGRAM_ID);
+
+    info!("Preparing SubmitAttestation for UTXO: {}", utxo);
+    info!("UTXO Hash: {:?}", hex::encode(utxo_hash));
+    
+    // Check PDA derivation consistency
+    let (derived_utxo_pda, _bump) = Pubkey::find_program_address(
+        &[b"utxo", &utxo_hash],
+        &PROGRAM_ID
+    );
+    info!("Derived UTXO PDA from hash: {}", derived_utxo_pda);
+    
+    if *utxo != derived_utxo_pda {
+        warn!("MISMATCH! Event UTXO {} != Derived PDA {}", utxo, derived_utxo_pda);
+    }
 
     let ix = submit_attestation(
         &PROGRAM_ID,
@@ -416,15 +501,18 @@ async fn events_subscription(
                 )
                 .await?;
 
-            stream
-                .flat_map(|e| {
-                    stream::iter(e.value.logs.into_iter().filter_map(|s| {
+            stream.flat_map(|e| {
+                    if e.value.err.is_some() {
+                        return stream::iter(Vec::new());
+                    }
+                    let logs: Vec<Vec<u8>> = e.value.logs.into_iter().filter_map(|s| {
                         if let Some(rest) = s.strip_prefix("Program data: ") {
                             BASE64_STANDARD.decode(rest).ok()
                         } else {
                             None
                         }
-                    }))
+                    }).collect();
+                    stream::iter(logs)
                 })
                 .for_each(move |e| {
                     let tx_chan = tx_chan.clone();
