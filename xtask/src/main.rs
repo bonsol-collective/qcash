@@ -680,11 +680,19 @@ async fn main() -> Result<()> {
         }
         Commands::StartTestEnv {
             validator_dir,
-            keys_dir,
+            keys_dir: _,
             number_of_nodes,
             show_solana_logs,
             show_node_logs,
-        } => {} //implement this. AI!
+        } => {
+            start_test_environment(
+                validator_dir,
+                show_solana_logs,
+                show_node_logs,
+                number_of_nodes,
+            )
+            .await?;
+        }
     }
 
     Ok(())
