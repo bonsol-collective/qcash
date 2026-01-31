@@ -387,25 +387,13 @@ pub async fn install_extension() -> Result<()> {
         );
     }
 
-    // Write updated config back
     let updated_config = serde_json::to_string_pretty(&config)?;
-    std::fs::write(config_path, &updated_config)?;
+    // now write the updated config to the NativeMessagingHosts dir of chrome. AI!
 
     println!(
         "{}",
         "✅ Configuration updated successfully!".bold().green()
     );
-    println!();
-    println!("{}", "Updated com.qcash.daemon.json:".bold().yellow());
-    println!("{}", updated_config.cyan());
-    println!();
-    println!("{}", "=".repeat(60));
-    println!("{}", "Next steps:".bold().green());
-    println!("1. Reload the extension in Chrome (click the refresh icon)");
-    println!("2. The native messaging host should now be configured");
-    println!("3. Test the extension by opening the popup");
-    println!("{}", "=".repeat(60));
-    println!();
 
     Ok(())
 }
