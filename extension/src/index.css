@@ -85,3 +85,7 @@ body {
 * {
   border-color: hsl(var(--border));
 }
+
+button {
+  cursor: pointer;
+}
