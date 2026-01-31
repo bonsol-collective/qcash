@@ -289,8 +289,11 @@ pub async fn build_extension() -> Result<()> {
 }
 
 /// Install Chrome extension
-// build the extension first, just in case. AI!
 pub async fn install_extension() -> Result<()> {
+    // Build the extension first, just in case
+    info!("Building extension before installation...");
+    build_extension().await?;
+
     // Display formatted instructions
     println!("\n{}", "=".repeat(60));
     println!(
