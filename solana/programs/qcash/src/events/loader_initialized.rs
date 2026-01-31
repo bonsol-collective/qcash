@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when a loader is initialized
 #[event]
+#[derive(Debug)]
 pub struct LoaderInitialized {
     /// Loader account address
     pub loader: Pubkey,

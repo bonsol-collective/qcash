@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when a ZK proof account is initialized
 #[event]
+#[derive(Debug)]
 pub struct ZkProofInitialized {
     /// ZK proof account address
     pub zk_proof: Pubkey,

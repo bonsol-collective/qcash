@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when a chunk is written to the ZK proof
 #[event]
+#[derive(Debug)]
 pub struct ZkProofChunkWritten {
     /// ZK proof account address
     pub zk_proof: Pubkey,

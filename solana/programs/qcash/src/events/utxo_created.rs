@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when a UTXO is created
 #[event]
+#[derive(Debug)]
 pub struct UtxoCreated {
     /// UTXO account PDA
     pub utxo: Pubkey,

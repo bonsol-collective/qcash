@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when a new prover is registered
 #[event]
+#[derive(Debug)]
 pub struct ProverRegistered {
     /// Admin who registered the prover
     pub admin: Pubkey,

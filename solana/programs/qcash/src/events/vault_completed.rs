@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when a vault is completed
 #[event]
+#[derive(Debug)]
 pub struct VaultCompleted {
     /// Vault PDA
     pub vault: Pubkey,

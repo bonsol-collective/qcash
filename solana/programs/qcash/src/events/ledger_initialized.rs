@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when the ledger is initialized
 #[event]
+#[derive(Debug)]
 pub struct LedgerInitialized {
     /// Initial count (should be 0)
     pub count: u64,

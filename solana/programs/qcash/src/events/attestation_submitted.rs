@@ -6,6 +6,7 @@ use anchor_lang::prelude::*;
 
 /// Event emitted when an attestation is submitted
 #[event]
+#[derive(Debug)]
 pub struct AttestationSubmitted {
     /// The UTXO being voted on
     pub utxo: Pubkey,
