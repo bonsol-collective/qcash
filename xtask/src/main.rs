@@ -388,11 +388,61 @@ pub async fn install_extension() -> Result<()> {
     }
 
     let updated_config = serde_json::to_string_pretty(&config)?;
-    // now write the updated config to the NativeMessagingHosts dir of chrome. AI!
+
+    // Determine the Chrome NativeMessagingHosts directory based on the OS
+    let native_messaging_dir = if cfg!(target_os = "linux") {
+        // Linux: ~/.config/google-chrome/NativeMessagingHosts
+        let home_dir = std::env::var("HOME").context("HOME environment variable not set")?;
+        Path::new(&home_dir)
+            .join(".config")
+            .join("google-chrome")
+            .join("NativeMessagingHosts")
+    } else if cfg!(target_os = "macos") {
+        // macOS: ~/Library/Application Support/Google/Chrome/NativeMessagingHosts
+        let home_dir = std::env::var("HOME").context("HOME environment variable not set")?;
+        Path::new(&home_dir)
+            .join("Library")
+            .join("Application Support")
+            .join("Google")
+            .join("Chrome")
+            .join("NativeMessagingHosts")
+    } else if cfg!(target_os = "windows") {
+        // Windows: %LOCALAPPDATA%\Google\Chrome\User Data\Default\NativeMessagingHosts
+        let local_app_data = std::env::var("LOCALAPPDATA")
+            .context("LOCALAPPDATA environment variable not set")?;
+        Path::new(&local_app_data)
+            .join("Google")
+            .join("Chrome")
+            .join("User Data")
+            .join("Default")
+            .join("NativeMessagingHosts")
+    } else {
+        return Err(anyhow::anyhow!(
+            "Unsupported operating system for Chrome NativeMessagingHosts"
+        ));
+    };
+
+    // Create the directory if it doesn't exist
+    std::fs::create_dir_all(&native_messaging_dir).context(format!(
+        "Failed to create directory: {:?}",
+        native_messaging_dir
+    ))?;
+
+    // Write the updated config to the NativeMessagingHosts directory
+    let target_path = native_messaging_dir.join("com.qcash.daemon.json");
+    std::fs::write(&target_path, &updated_config).context(format!(
+        "Failed to write config to: {:?}",
+        target_path
+    ))?;
 
     println!(
         "{}",
         "✅ Configuration updated successfully!".bold().green()
+    );
+    println!(
+        "{} {:?}",
+        "Config written to:".bold().green(),
+        target_path
     );
 
     Ok(())
