@@ -7,10 +7,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
-use interface::{
-    accounts, instructions,
-    types::{Ledger, ProverInfo},
-};
+use interface::{accounts, instructions};
 use serde::Serialize;
 use sha3::{Digest, Keccak256};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -40,6 +37,7 @@ struct Cli {
     verbose: bool,
 }
 
+// add a build-extension action that will cd to extension and do npm install and npm build. AI!
 #[derive(Subcommand)]
 enum Commands {
     /// Start a complete test environment (validator, server, node)
