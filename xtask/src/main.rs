@@ -7,7 +7,12 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
+use interface::{
+    accounts, instructions,
+    types::{Ledger, ProverInfo},
+};
 use serde::Serialize;
+use sha3::{Digest, Keccak256};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey,
@@ -530,42 +535,60 @@ async fn start_test_environment(
         CommitmentConfig::confirmed(),
     ));
 
-    // Create root prover data for all nodes
-    let mut root_provers = Vec::new();
-    for (i, solana_keys) in node_solana_keys.iter().enumerate() {
-        let prover_pubkey_hash = calculate_keccak_hash(&solana_keys.1.keypair.pubkey().to_bytes());
-        root_provers.push(RootProverData {
-            pubkey_hash: prover_pubkey_hash.try_into().unwrap(),
-            stake_amount: 1_000_000_000,
-            unique_id: (i + 1) as u64,
-        });
-    }
-
     // Get PDAs
     let (program_config_pda, _program_config_bump) =
-        InitializeProgramConfig::program_config_pda(&interface::PROGRAM_ID);
+        accounts::InitProgram::program_config_pda(&interface::PROGRAM_ID);
     let (prover_registry_pda, _) =
-        InitializeProgramConfig::prover_registry_pda(&interface::PROGRAM_ID);
+        accounts::InitProgram::prover_registry_pda(&interface::PROGRAM_ID);
 
     // Create initialize program config instruction
-    let initialize_program_config = interface::initialize_program_config(
+    let initialize_program_config = interface::init_program(
         &interface::PROGRAM_ID,
-        interface::accounts::InitializeProgramConfig {
-            deployer: owner.pubkey(),
+        accounts::InitProgram {
+            admin: owner.pubkey(),
             prover_registry: prover_registry_pda,
             program_config: program_config_pda,
             ..Default::default()
         },
-        interface::instructions::InitializeProgramConfig {
-            default_min_votes: 1,
-            root_provers,
-        },
+        instructions::InitProgram {},
     );
 
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    // tokio::time::sleep(Duration::from_secs(10)).await;
     // Send the transaction
     send_transaction(&rpc_client, &owner, &[initialize_program_config]).await?;
-    info!("Solana program configuration initialized!");
+
+    let (ledger_pda, _bump) = accounts::InitLedger::ledger_pda(&interface::PROGRAM_ID);
+    let initialize_ledger = interface::init_ledger(
+        &interface::PROGRAM_ID,
+        accounts::InitLedger {
+            ledger: ledger_pda,
+            payer: owner.pubkey(),
+            ..Default::default()
+        },
+        instructions::InitLedger {},
+    );
+    send_transaction(&rpc_client, &owner, &[initialize_ledger]).await?;
+
+    // Create root prover data for all nodes
+    let mut root_provers = Vec::new();
+    for (i, solana_keys) in node_solana_keys.iter().enumerate() {
+        let register_prover = interface::register_prover(
+            &interface::PROGRAM_ID,
+            accounts::RegisterProver {
+                admin: owner.pubkey(),
+                program_config: program_config_pda,
+                prover_registry: prover_registry_pda,
+                prover_pubkey: 
+            },
+            args,
+        );
+        let prover_pubkey_hash = calculate_keccak_hash(&solana_keys.1.keypair.pubkey().to_bytes());
+        root_provers.push(ProverInfo {
+            pubkey_hash: prover_pubkey_hash.try_into().unwrap(),
+            is_active: true,
+            unique_id: (i + 1) as u64,
+        });
+    }
 
     info!("Test environment is running. Press Ctrl+C to stop.");
 
@@ -577,10 +600,24 @@ async fn start_test_environment(
     for mut node_process in node_processes {
         node_process.kill().await?;
     }
-    server_process.kill().await?;
     validator_process.kill().await?;
 
     Ok(())
+}
+
+pub async fn send_transaction(
+    client: &RpcClient,
+    owner: &Arc<Keypair>,
+    instructions: &[solana_sdk::instruction::Instruction],
+) -> Result<solana_sdk::signature::Signature> {
+    let recent_blockhash = client.get_latest_blockhash().await?;
+    let tx = solana_sdk::transaction::Transaction::new_signed_with_payer(
+        instructions,
+        Some(&owner.pubkey()),
+        &[owner],
+        recent_blockhash,
+    );
+    Ok(client.send_and_confirm_transaction(&tx).await?)
 }
 
 #[tokio::main]
@@ -655,4 +692,10 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn calculate_keccak_hash(data: &[u8]) -> Vec<u8> {
+    let mut hasher = Keccak256::new();
+    hasher.update(data);
+    hasher.finalize().to_vec()
 }
