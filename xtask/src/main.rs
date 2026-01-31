@@ -1,7 +1,13 @@
-use std::{path::PathBuf, time::Duration};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
+use serde::Serialize;
+use solana_sdk::pubkey::Pubkey;
 use tempfile::NamedTempFile;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
@@ -9,7 +15,8 @@ use tokio::{
     select,
     sync::oneshot,
 };
-use tracing::info;
+use tracing::{Level, info, warn};
+use tracing_subscriber::FmtSubscriber;
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -49,8 +56,6 @@ enum Commands {
     },
     /// Build the Qcash node
     BuildNode,
-    /// Generate test certificates
-    GenerateCerts,
     /// Build the smart contract
     BuildSmartContract,
     /// Start Qcash node (uses generated test keys)
@@ -75,6 +80,85 @@ enum Commands {
     },
 }
 
+#[derive(Debug, Serialize)]
+pub struct SolanaAccount {
+    pubkey: String,
+    account: AccountData,
+    #[serde(skip)]
+    temp_file: NamedTempFile,
+}
+
+#[derive(Debug, Serialize)]
+struct AccountData {
+    lamports: u64,
+    data: Vec<String>,
+    owner: String,
+    executable: bool,
+    #[serde(rename = "rentEpoch")]
+    rent_epoch: u64,
+    space: u64,
+}
+
+impl SolanaAccount {
+    /// Create a new SolanaAccount with specified lamports
+    pub fn new_with_lamports(pubkey: Pubkey, lamports: u64) -> Result<Self> {
+        Ok(Self {
+            pubkey: pubkey.to_string(),
+            account: AccountData {
+                lamports,
+                data: vec!["".to_string(), "base64".to_string()],
+                owner: "11111111111111111111111111111111".to_string(),
+                executable: false,
+                rent_epoch: 0,
+                space: 0,
+            },
+            temp_file: NamedTempFile::new()?,
+        })
+    }
+
+    /// Get the temporary file path if it exists
+    pub fn temp_file_path(&self) -> &Path {
+        self.temp_file.path()
+    }
+
+    /// Save the account to a specific file path
+    pub fn save(&mut self) -> std::io::Result<()> {
+        let json = serde_json::to_string_pretty(self).expect("failed to serialize account");
+
+        self.temp_file.write_all(json.as_bytes())?;
+        Ok(())
+    }
+}
+
+/// Helper function to retry an operation with configurable parameters
+pub async fn retry_with_backoff<F, Fut>(
+    max_attempts: usize,
+    delay: Duration,
+    check_fn: F,
+) -> Result<()>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    let mut attempts = 0;
+
+    while attempts < max_attempts {
+        attempts += 1;
+        match check_fn().await {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                if attempts < max_attempts {
+                    tokio::time::sleep(delay).await;
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Build Qcash node binary
 pub async fn build_node() -> Result<()> {
     use tokio::process::Command;
@@ -93,6 +177,125 @@ pub async fn build_node() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Start Solana test validator with optional accounts
+pub async fn start_solana_validator(
+    validator_dir: &std::path::Path,
+    mut accounts: Vec<SolanaAccount>,
+    show_logs: bool,
+) -> Result<Child> {
+    use std::process::Stdio;
+    use tokio::process::Command;
+
+    info!("Starting Solana test validator...");
+
+    // Save all accounts and collect their paths
+    let mut account_args = Vec::new();
+
+    // Now collect the paths from the saved accounts
+    for account in &mut accounts {
+        account.save()?;
+        account_args.push("--account");
+        account_args.push(&account.pubkey);
+        account_args.push(account.temp_file_path().to_str().unwrap());
+    }
+    let validator_cmd = unsafe {
+        Command::new("solana-test-validator")
+            .pre_exec(|| {
+                // Die if parent dies (Linux only)
+                #[cfg(target_os = "linux")]
+                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
+                Ok(())
+            })
+            .args(&[
+                "--ledger",
+                validator_dir.to_str().unwrap(),
+                "--bind-address",
+                "127.0.0.1",
+                "--rpc-pubsub-enable-block-subscription",
+                "--bpf-program",
+                &interface::PROGRAM_ID.to_string(),
+                "solana-qssn/target/sbpf-solana-solana/release/solana_qssn.so",
+                "--quiet",
+            ])
+            .args(&account_args)
+            .stdout(Stdio::piped())
+            .spawn()?
+    };
+
+    // Wait for validator to start
+    info!("Waiting for validator to start...");
+    let max_attempts = 10;
+    let delay = Duration::from_secs(1);
+
+    retry_with_backoff(max_attempts, delay, || async {
+        info!("Checking validator health...");
+        Command::new("solana")
+            .args(&[
+                "ping",
+                "--url",
+                "http://localhost:8899",
+                "-c",
+                "1",
+                "--commitment",
+                "confirmed",
+            ])
+            .output()
+            .await?;
+        Ok(())
+    })
+    .await?;
+    info!("Validator is ready!");
+
+    if show_logs {
+        // Spawn async task to run solana logs command
+        tokio::spawn(async move {
+            loop {
+                let mut logs_cmd = Command::new("solana")
+                    .args(&["logs", "--url", "http://localhost:8899"])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start solana logs");
+
+                let stdout = logs_cmd.stdout.take().unwrap();
+                let stderr = logs_cmd.stderr.take().unwrap();
+
+                let stdout_reader = BufReader::new(stdout);
+                let stderr_reader = BufReader::new(stderr);
+
+                let mut stdout_lines = stdout_reader.lines();
+                let mut stderr_lines = stderr_reader.lines();
+
+                info!("Streaming Solana logs...");
+
+                loop {
+                    select! {
+                        stdout_line = stdout_lines.next_line() => {
+                            if let Ok(Some(line)) = stdout_line {
+                                info!("Solana logs: {}", line);
+                            } else {
+                                break;
+                            }
+                        },
+                        stderr_line = stderr_lines.next_line() => {
+                            if let Ok(Some(line)) = stderr_line {
+                                info!("Solana logs stderr: {}", line);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                warn!("Solana logs disconnected, retrying...");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+    }
+
+    Ok(validator_cmd)
 }
 
 /// Start Qfire node
@@ -224,13 +427,15 @@ pub async fn build_smart_contract() -> Result<()> {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Set up logging
-    if cli.verbose {
-        std::env::set_var("RUST_LOG", "debug");
-    } else {
-        std::env::set_var("RUST_LOG", "info");
-    }
-    tracing_subscriber::fmt::init();
+    // Initialize logging
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(if cli.verbose {
+            Level::DEBUG
+        } else {
+            Level::INFO
+        })
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).context("Failed to set up logging")?;
 
     match cli.command {
         Commands::BuildNode => {
@@ -239,41 +444,29 @@ async fn main() -> Result<()> {
         Commands::BuildSmartContract => {
             build_smart_contract().await?;
         }
-        Commands::GenerateCerts => {
-            info!("Generating test certificates...");
-            // Certificate generation would go here
-            // For now, just log that it's a placeholder
-            info!("Certificate generation is not yet implemented");
-        }
-        Commands::StartNode { show_logs, cert_dir } => {
+        Commands::StartNode {
+            show_logs,
+            cert_dir,
+        } => {
             info!("Starting Qcash node...");
             // This would require setting up keys and certificates
             // For now, just log that it's a placeholder
             info!("StartNode command is not yet fully implemented");
         }
-        Commands::StartValidator { validator_dir, show_logs } => {
-            info!("Starting Solana validator...");
-            // This would start a Solana test validator
-            // For now, just log that it's a placeholder
-            info!("StartValidator command is not yet fully implemented");
-        }
-        Commands::StartTestEnv { 
-            validator_dir, 
-            cert_dir, 
-            number_of_nodes, 
-            show_solana_logs, 
-            show_node_logs 
+        Commands::StartValidator {
+            validator_dir,
+            show_logs,
         } => {
-            info!("Starting complete test environment...");
-            info!("  - Validator dir: {:?}", validator_dir);
-            info!("  - Cert dir: {:?}", cert_dir);
-            info!("  - Number of nodes: {}", number_of_nodes);
-            info!("  - Show Solana logs: {}", show_solana_logs);
-            info!("  - Show node logs: {}", show_node_logs);
-            // This would orchestrate starting validator, certificates, and nodes
-            // For now, just log that it's a placeholder
-            info!("StartTestEnv command is not yet fully implemented");
+            info!("Starting Solana validator...");
+            // implement this. AI!
         }
+        Commands::StartTestEnv {
+            validator_dir,
+            cert_dir,
+            number_of_nodes,
+            show_solana_logs,
+            show_node_logs,
+        } => {}
     }
 
     Ok(())
