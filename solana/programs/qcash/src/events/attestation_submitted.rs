@@ -14,10 +14,8 @@ pub struct AttestationSubmitted {
     pub utxo_hash: [u8; 32],
     /// Old prover's public key (before rotation)
     pub prover_old: Pubkey,
-    /// Old prover's hash
-    pub prover_old_hash: [u8; 32],
     /// New prover's public key (after rotation)
-    pub prover_new: Pubkey,
+    pub prover: Pubkey,
     /// Prover's unique ID
     pub prover_unique_id: u64,
     /// The vote (true=valid, false=invalid)
