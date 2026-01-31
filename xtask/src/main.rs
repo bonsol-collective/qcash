@@ -570,24 +570,21 @@ async fn start_test_environment(
     send_transaction(&rpc_client, &owner, &[initialize_ledger]).await?;
 
     // Create root prover data for all nodes
-    let mut root_provers = Vec::new();
     for (i, solana_keys) in node_solana_keys.iter().enumerate() {
+        let next_key_hash = calculate_keccak_hash(&solana_keys.1.keypair.pubkey().to_bytes());
         let register_prover = interface::register_prover(
             &interface::PROGRAM_ID,
             accounts::RegisterProver {
                 admin: owner.pubkey(),
                 program_config: program_config_pda,
                 prover_registry: prover_registry_pda,
-                prover_pubkey: 
+                prover_pubkey: solana_keys.0.keypair.pubkey(),
             },
-            args,
+            instructions::RegisterProver {
+                unique_id: i as u64,
+                next_key_hash,
+            },
         );
-        let prover_pubkey_hash = calculate_keccak_hash(&solana_keys.1.keypair.pubkey().to_bytes());
-        root_provers.push(ProverInfo {
-            pubkey_hash: prover_pubkey_hash.try_into().unwrap(),
-            is_active: true,
-            unique_id: (i + 1) as u64,
-        });
     }
 
     info!("Test environment is running. Press Ctrl+C to stop.");
@@ -694,8 +691,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn calculate_keccak_hash(data: &[u8]) -> Vec<u8> {
+fn calculate_keccak_hash(data: &[u8]) -> [u8; 32] {
     let mut hasher = Keccak256::new();
     hasher.update(data);
-    hasher.finalize().to_vec()
+    hasher.finalize().to_vec().try_into().unwrap()
 }
