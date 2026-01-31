@@ -249,6 +249,8 @@ pub async fn build_wasm() -> Result<()> {
         ));
     }
 
+    // now run wasm-pack build --target nodejs --out-dir pkg-node . AI!
+
     Ok(())
 }
 
