@@ -34,22 +34,23 @@ pub struct RegisterProver<'info> {
 pub fn register_prover(
     ctx: Context<RegisterProver>,
     unique_id: u64,
+    next_key_hash: [u8; 32],
 ) -> Result<()> {
     let prover_registry = &mut ctx.accounts.prover_registry;
     let prover_pubkey = ctx.accounts.prover_pubkey.key();
 
     // Hash the prover's public key
-    let prover_pubkey_hash = hash(prover_pubkey.as_ref()).to_bytes();
+    // let prover_pubkey_hash = hash(prover_pubkey.as_ref()).to_bytes();
 
     // Register the prover
-    prover_registry.register_prover(unique_id, prover_pubkey_hash)?;
+    prover_registry.register_prover(unique_id, next_key_hash)?;
 
     // Emit event
     emit!(ProverRegistered {
         admin: ctx.accounts.admin.key(),
         unique_id,
         prover_pubkey,
-        prover_pubkey_hash,
+        prover_pubkey_hash: next_key_hash,
         total_provers: prover_registry.prover_count,
         timestamp: Clock::get()?.unix_timestamp,
     });

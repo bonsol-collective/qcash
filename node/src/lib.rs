@@ -20,7 +20,12 @@ use solana_sdk::{
 use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, error, info, warn};
 
-pub const IMAGE_ID: [u8; 32] = [0; 32];
+// Guest ID: [3123149550, 2958403742, 1163198136, 2906478055, 1985551465, 1662932468, 127326852, 1286749865]
+// Converted to [u8; 32] using little-endian byte order
+pub const IMAGE_ID: [u8; 32] = [
+    238, 122, 39, 186, 158, 168, 85, 176, 184, 254, 84, 69, 231, 85, 61, 173,
+    105, 28, 89, 118, 244, 85, 30, 99, 132, 218, 150, 7, 169, 62, 178, 76
+];
 
 /// Solana Key Manager for handling key rotation and management
 pub struct SolanaKeyManager {
@@ -316,8 +321,9 @@ impl QcashNode {
             .await
             .map_err(|e| anyhow!("Failed to download proof: {}", e))?;
 
+        // ZkProof header: 8 (discriminator) + 4 (total_len) + 4 (bytes_written) = 16 bytes
         let receipt: Receipt =
-            bincode::deserialize(&proof_data).map_err(|e| anyhow!("Can't parse proof: {}", e))?;
+            bincode::deserialize(&proof_data[16..]).map_err(|e| anyhow!("Can't parse proof: {}", e))?;
 
         let key_manager = self.key_manager.lock().await;
         let next_key_hash = key_manager.next_key_hash().try_into().unwrap();

@@ -718,6 +718,15 @@
         {
           "name": "unique_id",
           "type": "u64"
+        },
+        {
+          "name": "next_key_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },

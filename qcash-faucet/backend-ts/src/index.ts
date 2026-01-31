@@ -128,7 +128,6 @@ app.post("/airdrop", async (req, res) => {
             .signers([faucetKeypair])
             .rpc();
 
-        console.log("Airdrop completed:", airdropTx);
 
         res.json({
             status: "success",

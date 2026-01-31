@@ -80,8 +80,8 @@ pub mod solana_programs {
     }
 
     /// Register a new prover (admin only)
-    pub fn register_prover(ctx: Context<RegisterProver>, unique_id: u64) -> Result<()> {
-        register_prover::register_prover(ctx, unique_id)
+    pub fn register_prover(ctx: Context<RegisterProver>, unique_id: u64, next_key_hash: [u8; 32]) -> Result<()> {
+        register_prover::register_prover(ctx, unique_id, next_key_hash)
     }
 
     /// Deactivate a prover (admin only)
