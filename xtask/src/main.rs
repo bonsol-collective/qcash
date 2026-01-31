@@ -8,7 +8,7 @@ use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use solana_sdk::pubkey::Pubkey;
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, tempdir};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Child,
@@ -40,7 +40,7 @@ enum Commands {
 
         /// Directory to store or load TLS certs (contains cert.pem and key.pem). If not provided, a temporary directory and self-signed certs will be created.
         #[arg(long)]
-        cert_dir: Option<PathBuf>,
+        keys_dir: Option<PathBuf>,
 
         /// Number of Qcash nodes to start (default: 1)
         #[arg(long, default_value = "1")]
@@ -64,9 +64,9 @@ enum Commands {
         #[arg(long, default_value = "false")]
         show_logs: bool,
 
-        /// Directory to store or load TLS certs (contains cert.pem and key.pem). If not provided, a temporary directory and self-signed certs will be created.
+        /// Directory to store the solana keys
         #[arg(long)]
-        cert_dir: Option<PathBuf>,
+        keys_dir: Option<PathBuf>,
     },
     /// Start Solana test validator
     StartValidator {
@@ -300,11 +300,9 @@ pub async fn start_solana_validator(
 
 /// Start Qfire node
 pub async fn start_qfire_node(
-    pqc_key_file: &NamedTempFile,
-    solana_current_key: &NamedTempFile,
-    solana_next_key: &NamedTempFile,
+    solana_current_key: &str,
+    solana_next_key: &str,
     show_logs: bool,
-    cert_path: &str,
 ) -> Result<Child> {
     use std::process::Stdio;
     use tokio::process::Command;
@@ -320,18 +318,8 @@ pub async fn start_qfire_node(
                 Ok(())
             })
             .env("RUST_LOG", "debug")
-            .env("SERVER_ADDR", "127.0.0.1:8041")
-            .env("KEYPAIR_FILE", pqc_key_file.path().to_str().unwrap())
-            .env("KEYPAIR_PASSPHRASE", "test")
-            .env("CA_CERT", &format!("{}/ca-cert.pem", cert_path))
-            .env(
-                "SOLANA_CURRENT_KEY_FILE",
-                solana_current_key.path().to_str().unwrap(),
-            )
-            .env(
-                "SOLANA_NEXT_KEY_FILE",
-                solana_next_key.path().to_str().unwrap(),
-            )
+            .env("SOLANA_CURRENT_KEY_FILE", solana_current_key)
+            .env("SOLANA_NEXT_KEY_FILE", solana_next_key)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?
@@ -446,12 +434,10 @@ async fn main() -> Result<()> {
         }
         Commands::StartNode {
             show_logs,
-            cert_dir,
+            keys_dir,
         } => {
+            // use temp_dir() to generate a temp directory if keys_dir is none, then call the keys some static name, whatever you want and concat with the dir... and implement the actual running of the node. AI!
             info!("Starting Qcash node...");
-            // This would require setting up keys and certificates
-            // For now, just log that it's a placeholder
-            info!("StartNode command is not yet fully implemented");
         }
         Commands::StartValidator {
             validator_dir,
@@ -462,12 +448,12 @@ async fn main() -> Result<()> {
                 let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
                 temp_dir.into_path()
             });
-            
+
             start_solana_validator(&dir, vec![], show_logs).await?;
         }
         Commands::StartTestEnv {
             validator_dir,
-            cert_dir,
+            keys_dir,
             number_of_nodes,
             show_solana_logs,
             show_node_logs,
