@@ -1,6 +1,7 @@
 use std::{
     io::{self, Write},
     path::{Path, PathBuf},
+    process::Stdio,
     sync::Arc,
     time::Duration,
 };
@@ -19,7 +20,7 @@ use solana_sdk::{
 use tempfile::{NamedTempFile, tempdir};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
-    process::Child,
+    process::{Child, Command},
     select,
     sync::oneshot,
 };
@@ -215,8 +216,6 @@ where
 
 /// Build Qcash node binary
 pub async fn build_node() -> Result<()> {
-    use tokio::process::Command;
-
     info!("Building Qcash node...");
     let build_output = Command::new("cargo")
         .args(&["build", "--bin", "node"])
@@ -235,10 +234,9 @@ pub async fn build_node() -> Result<()> {
 
 /// Build browser extension
 pub async fn build_extension() -> Result<()> {
-    use tokio::process::Command;
-
     info!("Building browser extension...");
 
+    // move build wasm to a separate function (but dont add a command for it). AI!
     // Build the wasm directory
     info!("Building wasm with wasm-pack...");
     let wasm_build_output = Command::new("wasm-pack")
@@ -291,16 +289,13 @@ pub async fn build_extension() -> Result<()> {
 }
 
 /// Build and run the faucet (backend and frontend)
-pub async fn run_faucet() -> Result<()> {
-    use tokio::process::Command;
-    use std::process::Stdio;
-
+pub async fn run_faucet(wait: bool) -> Result<(Child, Child)> {
     info!("Starting faucet services...");
 
     // Build and run backend
     info!("Building and starting faucet backend...");
     let backend_dir = "qcash-faucet/backend-ts";
-    
+
     // Install backend dependencies
     let backend_install = Command::new("npm")
         .args(&["install"])
@@ -338,12 +333,12 @@ pub async fn run_faucet() -> Result<()> {
             tokio::select! {
                 stdout_line = stdout_lines.next_line() => {
                     if let Ok(Some(line)) = stdout_line {
-                        info!("[Faucet Backend] {}", line);
+                        info!(target: "Faucet Backend", "{}", line);
                     }
                 },
                 stderr_line = stderr_lines.next_line() => {
                     if let Ok(Some(line)) = stderr_line {
-                        info!("[Faucet Backend] {}", line);
+                        info!(target: "Faucet Backend", "{}", line);
                     }
                 },
                 else => break,
@@ -392,12 +387,12 @@ pub async fn run_faucet() -> Result<()> {
             tokio::select! {
                 stdout_line = stdout_lines.next_line() => {
                     if let Ok(Some(line)) = stdout_line {
-                        info!("[Faucet Frontend] {}", line);
+                        info!(target: "Faucet Frontend", "{}", line);
                     }
                 },
                 stderr_line = stderr_lines.next_line() => {
                     if let Ok(Some(line)) = stderr_line {
-                        info!("[Faucet Frontend] {}", line);
+                        info!(target: "Faucet Frontend", "{}", line);
                     }
                 },
                 else => break,
@@ -410,15 +405,17 @@ pub async fn run_faucet() -> Result<()> {
     info!("Frontend: http://localhost:5173");
     info!("Press Ctrl+C to stop all services");
 
-    // Wait for Ctrl+C
-    tokio::signal::ctrl_c().await?;
+    if wait {
+        // Wait for Ctrl+C
+        tokio::signal::ctrl_c().await?;
 
-    // Clean up processes
-    info!("Shutting down faucet services...");
-    backend_process.kill().await?;
-    frontend_process.kill().await?;
+        // Clean up processes
+        info!("Shutting down faucet services...");
+        backend_process.kill().await?;
+        frontend_process.kill().await?;
+    }
 
-    Ok(())
+    Ok((backend_process, frontend_process))
 }
 
 /// Install Chrome extension
@@ -580,9 +577,6 @@ pub async fn start_solana_validator(
     mut accounts: Vec<SolanaAccount>,
     show_logs: bool,
 ) -> Result<Child> {
-    use std::process::Stdio;
-    use tokio::process::Command;
-
     info!("Starting Solana test validator...");
 
     // Save all accounts and collect their paths
@@ -670,14 +664,14 @@ pub async fn start_solana_validator(
                     select! {
                         stdout_line = stdout_lines.next_line() => {
                             if let Ok(Some(line)) = stdout_line {
-                                info!("Solana logs: {}", line);
+                            info!(target: "Solana", "{}", line);
                             } else {
                                 break;
                             }
                         },
                         stderr_line = stderr_lines.next_line() => {
                             if let Ok(Some(line)) = stderr_line {
-                                info!("Solana logs stderr: {}", line);
+                            info!(target: "Solana", "{}", line);
                             } else {
                                 break;
                             }
@@ -700,9 +694,6 @@ pub async fn start_node(
     solana_next_key: &str,
     show_logs: bool,
 ) -> Result<Child> {
-    use std::process::Stdio;
-    use tokio::process::Command;
-
     info!("Starting Qfire node...");
 
     let mut node_cmd = unsafe {
@@ -714,7 +705,6 @@ pub async fn start_node(
                 Ok(())
             })
             .env("RUST_LOG", "debug")
-            .env("JSON_LOG", "1")
             .env("SOLANA_CURRENT_KEY_FILE", solana_current_key)
             .env("SOLANA_NEXT_KEY_FILE", solana_next_key)
             .stdout(Stdio::piped())
@@ -742,7 +732,7 @@ pub async fn start_node(
                 stdout_line = stdout_lines.next_line() => {
                     if let Ok(Some(line)) = stdout_line {
                         if show_logs {
-                            info!("Client stdout: {}", line);
+                            println!("{}", line);
                         }
 
                         // Check for login successful message
@@ -758,7 +748,7 @@ pub async fn start_node(
                 stderr_line = stderr_lines.next_line() => {
                     if let Ok(Some(line)) = stderr_line {
                         if show_logs {
-                            info!("Client stderr: {}", line);
+                            println!("{}", line);
                         }
                     } else {
                         break;
@@ -788,8 +778,6 @@ pub async fn start_node(
 }
 
 pub async fn build_smart_contract() -> Result<()> {
-    use tokio::process::Command;
-
     info!("Building smart contract...");
     let build_output = Command::new("anchor")
         .args(&["build"])
@@ -933,6 +921,8 @@ async fn start_test_environment(
         send_transaction(&rpc_client, &owner, &[register_prover]).await?;
     }
 
+    let (mut faucet_backend, mut faucet_frontend) = run_faucet(false).await?;
+
     info!("Test environment is running. Press Ctrl+C to stop.");
 
     // Wait for Ctrl+C
@@ -943,6 +933,8 @@ async fn start_test_environment(
     for mut node_process in node_processes {
         node_process.kill().await?;
     }
+    faucet_backend.kill().await?;
+    faucet_frontend.kill().await?;
     validator_process.kill().await?;
 
     Ok(())
@@ -974,6 +966,7 @@ async fn main() -> Result<()> {
         } else {
             Level::INFO
         })
+        .with_ansi(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber).context("Failed to set up logging")?;
 
@@ -991,7 +984,7 @@ async fn main() -> Result<()> {
             install_extension().await?;
         }
         Commands::RunFaucet => {
-            run_faucet().await?;
+            run_faucet(true).await?;
         }
         Commands::StartNode {
             show_logs,
