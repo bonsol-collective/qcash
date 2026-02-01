@@ -46,6 +46,14 @@ export default function Dashboard() {
         checkVault();
     }, [wallet]);
 
+    // Auto-sync when extension opens and vault is registered
+    useEffect(() => {
+        if (status === 'registered' && !isSyncing) {
+            console.log("Auto-syncing on startup...");
+            syncNow();
+        }
+    }, [status]); // Only trigger when status changes to 'registered'
+
     const handleRegister = async () => {
         try {
             setStatus('loading');

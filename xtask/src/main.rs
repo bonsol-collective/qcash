@@ -936,6 +936,12 @@ async fn start_test_environment(
     // Add nodes
     for (i, solana_keys) in node_solana_keys.iter().enumerate() {
         let next_key_hash = calculate_sha256_hash(&solana_keys.1.keypair.pubkey().to_bytes());
+        info!(
+            "Registering prover {}: pubkey={}, next_key_hash (stored in registry)={:02x?}",
+            i + 1,
+            solana_keys.0.keypair.pubkey(),
+            next_key_hash
+        );
         let register_prover = interface::register_prover(
             &interface::PROGRAM_ID,
             accounts::RegisterProver {

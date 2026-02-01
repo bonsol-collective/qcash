@@ -1,9 +1,10 @@
-import { Send, X, Loader2 } from 'lucide-react';
+import { Send, X, Loader2, CheckCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { useTransfer } from '../hooks/useTransfer';
+import { useLedgerSync } from '../hooks/useLedgerSync';
 
 interface SendTokenModalProps {
     isOpen: boolean;
@@ -14,8 +15,10 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
 
     const { prepareTransaction, executeSend, status } = useTransfer();
+    const { syncNow } = useLedgerSync();
 
     const handleSend = async () => {
         if (!amount || !recipient) return;
@@ -24,7 +27,17 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
 
         try {
             await executeSend(Number(amount), recipient);
-            onClose();
+            // Show success message
+            // Sync after successful send
+            // Close modal after 2 seconds
+            setShowSuccess(true);
+            syncNow();
+            setTimeout(() => {
+                setShowSuccess(false);
+                setRecipient('');
+                setAmount('');
+                onClose();
+            }, 2000);
         } catch (err) {
             // TODO: Show Toast
             console.error("Send failed:", err);
@@ -41,7 +54,16 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
 
             return () => clearTimeout(timer);
         }
-    }, [recipient, prepareTransaction, isOpen]); 
+    }, [recipient, prepareTransaction, isOpen]);
+
+    // Reset state when modal closes
+    useEffect(() => {
+        if (!isOpen) {
+            setShowSuccess(false);
+            setRecipient('');
+            setAmount('');
+        }
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -53,6 +75,27 @@ export function SendTokenModal({ isOpen, onClose }: SendTokenModalProps) {
         if (status === "submitting") return "Submitting...";
         return "Send QCash";
     };
+
+    // Success state
+    if (showSuccess) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+                <Card className="w-full max-w-md p-8 space-y-4 shadow-xl border border-border bg-background text-center animate-in zoom-in-95 duration-200">
+                    <div className="flex justify-center">
+                        <div className="p-4 rounded-full bg-green-900/30">
+                            <CheckCircle className="w-12 h-12 text-green-500" />
+                        </div>
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-foreground">Sent Successfully!</h2>
+                        <p className="text-sm text-muted-foreground mt-2">
+                            {amount} QCASH has been sent. Waiting for prover attestation...
+                        </p>
+                    </div>
+                </Card>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
