@@ -183,3 +183,8 @@ Now you gotta wait for nodes to verify the proof and update the state of the acc
   <img src="images/image-16.png" alt="alt text" />
 </p>
 
+---
+
+## License
+
+This project is licensed under the Business Source License 1.1. See `LICENSE`.
