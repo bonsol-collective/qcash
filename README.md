@@ -1,7 +1,6 @@
 # QCash: Quantum-Safe Private Vault on Solana
 
 ![Solana](https://img.shields.io/badge/Solana-Devnet-blue?style=for-the-badge&logo=solana)
-![ZK-STARK](https://img.shields.io/badge/ZK-STARK-Privacy-purple?style=for-the-badge)
 ![Quantum Safe](https://img.shields.io/badge/Quantum-Safe-Green?style=for-the-badge)
 ![Rust](https://img.shields.io/badge/Rust-Daemon-orange?style=for-the-badge&logo=rust)
 
