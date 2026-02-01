@@ -18,7 +18,7 @@ pub use events::*;
 pub use handlers::*;
 pub use state::*;
 
-declare_id!("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
+declare_id!("QCashfSHwqptwFRSbqjBnxYH7GbDzbAfxVeDGXhL1fv");
 
 #[program]
 pub mod solana_programs {
