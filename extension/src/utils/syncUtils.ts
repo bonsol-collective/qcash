@@ -43,24 +43,32 @@ export interface SyncResult {
 }
 
 // Helper to determine UTXO status from votes field
+// MIN_ATTESTATIONS = 1 (matches the Solana program constant)
+const MIN_ATTESTATIONS = 1;
+
 function determineUtxoStatus(votes: any): { status: UtxoStatus; voteCount: number } {
-    // votes = null → airdrop (finalized)
+    // votes = null → airdrop (finalized without voting)
     if (votes === null || votes === undefined) {
         return { status: 'finalized', voteCount: 0 };
     }
 
     // votes is an array of ProverVote
-    // Check if any vote has a non-zero prover_id (used vote)
-    const usedVotes = votes.filter((vote: any) =>
-        vote && vote.proverId && vote.proverId.toString() !== '0'
+    // Count valid votes (prover_id != 0 AND is_valid = true)
+    const validVotes = votes.filter((vote: any) =>
+        vote && vote.proverId && vote.proverId.toString() !== '0' && vote.isValid === true
     );
 
-    if (usedVotes.length === 0) {
+    const voteCount = validVotes.length;
+
+    if (voteCount >= MIN_ATTESTATIONS) {
+        // Threshold met → finalized
+        return { status: 'finalized', voteCount };
+    } else if (voteCount > 0) {
+        // Has votes but threshold not met → voted
+        return { status: 'voted', voteCount };
+    } else {
         // No votes yet → pending
         return { status: 'pending', voteCount: 0 };
-    } else {
-        // Has votes → voted (may need threshold check)
-        return { status: 'voted', voteCount: usedVotes.length };
     }
 }
 

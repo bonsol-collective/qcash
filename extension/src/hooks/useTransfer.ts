@@ -354,12 +354,13 @@ export const useTransfer = () => {
     };
 
     // Helper to create a single UTXO (handles ciphertext upload + UTXO creation)
+    // Returns the transaction signature for the createUtxo instruction
     const createUtxo = async (
         program: any,
         payer: any,
         output: any,
         zkProofPubkey: PublicKey
-    ) => {
+    ): Promise<string> => {
         // Init Loader for ciphertext
         const loaderKeypair = Keypair.generate();
 
@@ -403,7 +404,7 @@ export const useTransfer = () => {
         );
 
         // Create UTXO
-        await program.methods
+        const txSignature = await program.methods
             .createUtxo(
                 Array.from(utxoHash),
                 Buffer.from(new Uint8Array(output.encrypted_payload)),
@@ -421,6 +422,9 @@ export const useTransfer = () => {
             .rpc();
 
         console.log("UTXO created:", utxoPda.toString());
+        console.log("Create UTXO tx signature:", txSignature);
+
+        return txSignature;
     };
 
 

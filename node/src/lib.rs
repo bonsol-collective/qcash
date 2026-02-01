@@ -20,11 +20,12 @@ use solana_sdk::{
 use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, error, info, warn};
 
-// Guest ID: [3123149550, 2958403742, 1163198136, 2906478055, 1985551465, 1662932468, 127326852, 1286749865]
+// Guest ID: [4210644281, 3059778711, 2026232224, 713154289, 1347314078, 1484885349, 3516267778, 2143507687]
 // Converted to [u8; 32] using little-endian byte order
 pub const IMAGE_ID: [u8; 32] = [
-    127, 44, 174, 85, 213, 14, 167, 223, 46, 79, 95, 39, 209, 68, 82, 95, 37, 120, 61, 89, 212, 94,
-    103, 53, 174, 150, 40, 72, 59, 19, 163, 255,
+    57, 85, 249, 250, 151, 132, 96, 182, 160, 217, 197, 120,
+    241, 222, 129, 42, 158, 97, 78, 80, 101, 141, 129, 88,
+    2, 253, 149, 209, 231, 84, 195, 127,
 ];
 
 /// Solana Key Manager for handling key rotation and management
@@ -169,6 +170,13 @@ impl SolanaKeyManager {
         hasher.finalize().to_vec()
     }
 
+    /// Get SHA256 hash of the current key (used for prover lookup in submit_attestation)
+    pub fn current_key_hash(&self) -> Vec<u8> {
+        let mut hasher = Sha256::new();
+        hasher.update(self.current_key.pubkey().as_ref());
+        hasher.finalize().to_vec()
+    }
+
     /// Get the previous Solana key
     pub fn previous_key(&self) -> &Keypair {
         &self.previous_key
@@ -250,7 +258,12 @@ impl QcashNode {
         };
 
         // print the previous key (call it current key) and the current key (call it next key)
-        info!("Node key: {}", key_manager.previous_key().pubkey());
+        info!("Node key (previous): {}", key_manager.previous_key().pubkey());
+        info!("Prover key (current): {}", key_manager.current_key().pubkey());
+        info!(
+            "Current key hash (used for prover lookup): {}",
+            hex::encode(key_manager.current_key_hash())
+        );
         info!(
             "Next key hash: {}",
             hex::encode(key_manager.next_key_hash())
@@ -259,7 +272,7 @@ impl QcashNode {
         Ok(QcashNode {
             key_manager: Mutex::new(key_manager),
             websocket_url: config.websocket_url,
-            rpc_client: RpcClient::new(config.rpc_url),
+            rpc_client: RpcClient::new_with_commitment(config.rpc_url, CommitmentConfig::confirmed()),
         })
     }
 
@@ -325,7 +338,8 @@ impl QcashNode {
         let receipt: Receipt = bincode::deserialize(&proof_data[16..])
             .map_err(|e| anyhow!("Can't parse proof: {}", e))?;
 
-        let key_manager = self.key_manager.lock().await;
+        // Get mutable lock on key_manager for potential key rotation
+        let mut key_manager = self.key_manager.lock().await;
         let next_key_hash = key_manager.next_key_hash().try_into().unwrap();
 
         let vote = if let Err(e) = receipt.verify(IMAGE_ID) {
@@ -335,6 +349,57 @@ impl QcashNode {
             info!("Proof verified successfully!");
             true
         };
+
+        let current_key_pubkey = key_manager.current_key().pubkey();
+        let previous_key_pubkey = key_manager.previous_key().pubkey();
+
+        // Check balances and airdrop if needed (for test environment)
+        let current_balance = self.rpc_client.get_balance(&current_key_pubkey).await.unwrap_or(0);
+        let previous_balance = self.rpc_client.get_balance(&previous_key_pubkey).await.unwrap_or(0);
+
+        // Auto-airdrop 1 SOL if balance is zero (test environment only)
+        const AIRDROP_AMOUNT: u64 = 1_000_000_000; // 1 SOL in lamports
+
+        if previous_balance == 0 {
+            warn!("Fee payer (previous_key) has 0 balance, requesting airdrop...");
+            match self.rpc_client.request_airdrop(&previous_key_pubkey, AIRDROP_AMOUNT).await {
+                Ok(sig) => {
+                    info!("Airdrop requested for previous_key: {}", sig);
+                    // Wait for airdrop confirmation
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+                Err(e) => {
+                    warn!("Airdrop failed for previous_key: {}", e);
+                }
+            }
+        }
+
+        if current_balance == 0 {
+            warn!("Prover (current_key) has 0 balance, requesting airdrop...");
+            match self.rpc_client.request_airdrop(&current_key_pubkey, AIRDROP_AMOUNT).await {
+                Ok(sig) => {
+                    info!("Airdrop requested for current_key: {}", sig);
+                    // Wait for airdrop confirmation
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+                Err(e) => {
+                    warn!("Airdrop failed for current_key: {}", e);
+                }
+            }
+        }
+
+        // Re-check balances after potential airdrop
+        let current_balance = self.rpc_client.get_balance(&current_key_pubkey).await.unwrap_or(0);
+        let previous_balance = self.rpc_client.get_balance(&previous_key_pubkey).await.unwrap_or(0);
+
+        info!(
+            "Submitting attestation: prover (current)={} [Balance: {}], prover_old (fee payer/previous)={} [Balance: {}], utxo={}",
+            current_key_pubkey,
+            current_balance,
+            previous_key_pubkey,
+            previous_balance,
+            utxo
+        );
 
         let recent_blockhash = self.rpc_client.get_latest_blockhash().await?;
         let tx = create_submit_attestation_transaction(
@@ -347,6 +412,17 @@ impl QcashNode {
             recent_blockhash,
         )?;
         self.rpc_client.send_and_confirm_transaction(&tx).await?;
+
+        // Key rotation after successful attestation
+        // The program has updated the prover registry with next_key_hash,
+        // so we need to rotate our keys to match
+        info!("Attestation successful, rotating keys...");
+        key_manager.rotate_keys()?;
+        info!(
+            "Keys rotated. New current key: {}, New current key hash: {}",
+            key_manager.current_key().pubkey(),
+            hex::encode(key_manager.current_key_hash())
+        );
 
         Ok(())
     }

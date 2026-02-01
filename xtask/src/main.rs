@@ -859,9 +859,11 @@ async fn start_test_environment(
     let mut node_solana_keys = Vec::new();
     for _i in 0..number_of_nodes {
         let solana_keys = create_test_solana_keys().await?;
-        let pubkey = solana_keys.0.keypair.pubkey();
+        let current_pubkey = solana_keys.0.keypair.pubkey();
+        let next_pubkey = solana_keys.1.keypair.pubkey();
+        validator_accounts.push(SolanaAccount::new_with_lamports(current_pubkey, LAMPORTS_PER_SOL)?);
+        validator_accounts.push(SolanaAccount::new_with_lamports(next_pubkey, LAMPORTS_PER_SOL)?);
         node_solana_keys.push(solana_keys);
-        validator_accounts.push(SolanaAccount::new_with_lamports(pubkey, LAMPORTS_PER_SOL)?);
     }
 
     // Start validator
@@ -934,6 +936,12 @@ async fn start_test_environment(
     // Add nodes
     for (i, solana_keys) in node_solana_keys.iter().enumerate() {
         let next_key_hash = calculate_sha256_hash(&solana_keys.1.keypair.pubkey().to_bytes());
+        info!(
+            "Registering prover {}: pubkey={}, next_key_hash (stored in registry)={:02x?}",
+            i + 1,
+            solana_keys.0.keypair.pubkey(),
+            next_key_hash
+        );
         let register_prover = interface::register_prover(
             &interface::PROGRAM_ID,
             accounts::RegisterProver {
