@@ -1,3 +1,10 @@
+// Business Source License 1.1 (BSL 1.1)
+// Licensor: Bonsol Labs
+// Licensed Work: QCash
+// Change Date: 2030-12-31
+// Change License: Apache License 2.0
+// Use of this software is governed by the LICENSE file.
+
 import axios from 'axios';
 import { ArrowRight, CheckCircle2, Droplets, Loader2, XCircle } from 'lucide-react';
 import { useState } from 'react';
