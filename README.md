@@ -169,3 +169,18 @@ Now you can see the transaction on the blockchain.
 </p>
 
 Now you gotta wait for nodes to verify the proof and update the state of the account.
+
+**13) Now you see the balance updated**
+<p align="center">
+  <img src="images/image-13.png" alt="alt text" />
+</p>
+<p align="center">
+  <img src="images/image-14.png" alt="alt text" />
+</p>
+<p align="center">
+  <img src="images/image-15.png" alt="alt text" />
+</p>
+<p align="center">
+  <img src="images/image-16.png" alt="alt text" />
+</p>
+
