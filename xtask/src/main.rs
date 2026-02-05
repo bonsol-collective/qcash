@@ -657,7 +657,7 @@ pub async fn start_solana_validator(
 
     retry_with_backoff(max_attempts, delay, || async {
         info!("Checking validator health...");
-        Command::new("solana")
+        let output = Command::new("solana")
             .args(&[
                 "ping",
                 "--url",
@@ -669,6 +669,9 @@ pub async fn start_solana_validator(
             ])
             .output()
             .await?;
+        if !output.status.success() {
+            return Err(anyhow!("Validator not ready yet"));
+        }
         Ok(())
     })
     .await?;
@@ -741,6 +744,7 @@ pub async fn start_node(
                 Ok(())
             })
             .env("RUST_LOG", "debug")
+            .env("SOLANA_WEBSOCKET_URL", "ws://127.0.0.1:8900")
             .env("SOLANA_CURRENT_KEY_FILE", solana_current_key)
             .env("SOLANA_NEXT_KEY_FILE", solana_next_key)
             .stdout(Stdio::piped())
@@ -877,6 +881,16 @@ async fn start_test_environment(
     let mut validator_process =
         start_solana_validator(&validator_dir, validator_accounts, show_solana_logs).await?;
     info!("Solana validator started");
+
+    // Wait for WebSocket to be ready (RPC health check passes before WebSocket is fully ready)
+    info!("Waiting for WebSocket endpoint to be ready...");
+    retry_with_backoff(10, Duration::from_secs(1), || async {
+        tokio::net::TcpStream::connect("127.0.0.1:8900").await?;
+        Ok(())
+    })
+    .await
+    .context("WebSocket endpoint failed to become ready")?;
+    info!("WebSocket endpoint is ready!");
 
     // Start nodes and collect their keys
     let mut node_processes = Vec::new();
