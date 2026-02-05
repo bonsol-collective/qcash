@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "npm run build && npm run start",
+    "dev": "npm run clean && npm run build && npm run start",
     "build": "tsc -b",
+    "clean": "rm -rf dist",
     "start": "node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
