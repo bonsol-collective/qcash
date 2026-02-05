@@ -1,9 +1,0 @@
-{
-  "name": "com.qcash.daemon",
-  "description": "QCash Native Prover",
-  "path": "/home/jayant/Desktop/bonsol/qcash/daemon_wrapper.sh",
-  "type": "stdio",
-  "allowed_origins": [
-    "chrome-extension://nabmfiikncnobbokdppdeeflmgkfmacj/"
-  ]
-}

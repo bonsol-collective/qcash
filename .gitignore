@@ -32,3 +32,7 @@ node_modules
 test-ledger
 .yarn
 .aider*
+
+# Local config files (copy from .example and customize)
+com.qcash.daemon.json
+daemon_wrapper.sh
