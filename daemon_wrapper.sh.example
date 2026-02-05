@@ -9,13 +9,15 @@
 # Wrapper script for qcash daemon
 
 # [FIX] Manually set HOME so Risc0 can find ~/.risc0/cache
-export HOME="/home/jayant"
+# Replace with your home directory (e.g., /Users/yourname on macOS, /home/yourname on Linux)
+export HOME="<YOUR_HOME_DIRECTORY>"
 
 # [FIX] Ensure PATH includes standard binaries (just in case)
 export PATH="$HOME/.cargo/bin:$HOME/.risc0/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 # Ensure this path matches your actual project location
-PROJECT_ROOT="/home/jayant/Desktop/bonsol/qcash" 
+# Replace with the full path to your qcash directory
+PROJECT_ROOT="<PROJECT_PATH>" 
 
 LOG_DIR="$PROJECT_ROOT/logs"
 LOG_FILE="$LOG_DIR/daemon_$(date +%Y%m%d_%H%M%S).log"

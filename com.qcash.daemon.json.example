@@ -1,0 +1,9 @@
+{
+  "name": "com.qcash.daemon",
+  "description": "QCash Native Prover",
+  "path": "<PROJECT_PATH>/daemon_wrapper.sh",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://<YOUR_EXTENSION_ID>/"
+  ]
+}
