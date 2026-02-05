@@ -3640,6 +3640,7 @@ dependencies = [
  "futures",
  "hex",
  "interface",
+ "methods",
  "qcash",
  "risc0-zkvm",
  "sha2 0.10.9",
