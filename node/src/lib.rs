@@ -27,13 +27,14 @@ use solana_sdk::{
 use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, error, info, warn};
 
-// Guest ID: [4210644281, 3059778711, 2026232224, 713154289, 1347314078, 1484885349, 3516267778, 2143507687]
-// Converted to [u8; 32] using little-endian byte order
-pub const IMAGE_ID: [u8; 32] = [
-    57, 85, 249, 250, 151, 132, 96, 182, 160, 217, 197, 120,
-    241, 222, 129, 42, 158, 97, 78, 80, 101, 141, 129, 88,
-    2, 253, 149, 209, 231, 84, 195, 127,
-];
+/// Convert methods::GUEST_ID ([u32; 8]) to [u8; 32] in little-endian
+fn guest_id_to_bytes() -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    for (i, &val) in methods::GUEST_ID.iter().enumerate() {
+        bytes[i * 4..(i + 1) * 4].copy_from_slice(&val.to_le_bytes());
+    }
+    bytes
+}
 
 /// Solana Key Manager for handling key rotation and management
 pub struct SolanaKeyManager {
@@ -349,7 +350,7 @@ impl QcashNode {
         let mut key_manager = self.key_manager.lock().await;
         let next_key_hash = key_manager.next_key_hash().try_into().unwrap();
 
-        let vote = if let Err(e) = receipt.verify(IMAGE_ID) {
+        let vote = if let Err(e) = receipt.verify(guest_id_to_bytes()) {
             info!("Proof verification failed: {}", e);
             false
         } else {
