@@ -8,7 +8,7 @@ import { useWallet } from "../context/WalletContext";
 import * as wasm from '../wasm/qcash_wasm';
 import { Buffer } from "buffer";
 
-const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
+const PROGRAM_ID = new PublicKey("QCashfSHwqptwFRSbqjBnxYH7GbDzbAfxVeDGXhL1fv");
 
 export const useTransfer = () => {
     const { connection, getProgram } = useSolana();
