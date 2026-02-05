@@ -4,7 +4,7 @@ import { PublicKey } from "@solana/web3.js";
 import { Buffer } from "buffer";
 import { useWallet } from "../context/WalletContext";
 
-const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
+const PROGRAM_ID = new PublicKey("QCashfSHwqptwFRSbqjBnxYH7GbDzbAfxVeDGXhL1fv");
 
 export interface CryptoKeys {
   seed: number[];           // Converted from entropy hex

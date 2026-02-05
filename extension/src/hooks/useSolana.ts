@@ -13,7 +13,7 @@ import { useWasm } from "./useWasm";
 import type { SolanaPrograms } from "../idl/solana_programs";
 
 const NETWORK = "http://127.0.0.1:8899";
-const PROGRAM_ID = new PublicKey("DMiW8pL1vuaRSG367zDRRkSmQM8z5kKUGU3eC9t7AFDT");
+const PROGRAM_ID = new PublicKey("QCashfSHwqptwFRSbqjBnxYH7GbDzbAfxVeDGXhL1fv");
 const MIN_SOL_REQUIRED = 0.01 * web3.LAMPORTS_PER_SOL;
 
 export class InsufficientFundsError extends Error {
