@@ -26,6 +26,56 @@ Follow these steps to get the project up and running.
 *   **Node.js (v18+) & npm**: [Install Node.js](https://nodejs.org/)
 *   **Google Chrome**: Required for the wallet extension.
 
+**macOS Additional Requirements:**
+*   **Xcode Command Line Tools**: `xcode-select --install`
+*   **Metal Toolchain**: Required for GPU-accelerated proof generation (see macOS Setup below)
+
+### macOS Setup
+
+If you're on macOS, complete these additional steps before building:
+
+**a) Metal Toolchain Installation**
+
+Required for GPU-accelerated STARK proof generation:
+
+```bash
+# Run Xcode first launch setup
+xcodebuild -runFirstLaunch
+
+# Download Metal Toolchain (~700MB)
+xcodebuild -downloadComponent MetalToolchain
+```
+
+**b) Agave CLI (replaces deprecated solana-install)**
+
+The modern Solana CLI is now distributed via Agave:
+
+```bash
+# Install Agave
+cargo install agave-install
+agave-install init 2.3.0
+
+# Add to PATH (add to your shell profile for persistence)
+export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+```
+
+**c) Anchor Version Manager**
+
+```bash
+# Install avm if not present
+cargo install --git https://github.com/coral-xyz/anchor avm --locked
+
+# Install and use Anchor 0.32.1
+avm install 0.32.1
+avm use 0.32.1
+```
+
+**d) wasm-pack**
+
+```bash
+cargo install wasm-pack
+```
+
 ### 2. Build the Project
 Compile the Rust daemon, methods, and extension.
 
@@ -64,6 +114,10 @@ Open this file in your root directory.
 Copy the config file to Chrome's Native Messaging folder:
 
 ```bash
+# For macOS
+mkdir -p ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/
+cp com.qcash.daemon.json ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/
+
 # For Linux
 mkdir -p ~/.config/google-chrome/NativeMessagingHosts/
 cp com.qcash.daemon.json ~/.config/google-chrome/NativeMessagingHosts/
@@ -182,6 +236,51 @@ Now you gotta wait for nodes to verify the proof and update the state of the acc
 <p align="center">
   <img src="images/image-16.png" alt="alt text" />
 </p>
+
+---
+
+## Troubleshooting
+
+### Metal Toolchain Issues (macOS)
+
+```
+Error: cannot execute tool 'metal' due to missing Metal Toolchain
+```
+
+**Fix:** Run `xcodebuild -runFirstLaunch` first, then `xcodebuild -downloadComponent MetalToolchain`
+
+### Edition 2024 / constant_time_eq Error
+
+```
+feature `edition2024` is required
+```
+
+**Fix:** Update Solana CLI to Agave 2.3.0+ (older platform-tools have incompatible Rust version):
+
+```bash
+agave-install init 2.3.0
+```
+
+### Anchor Build Lock File Error
+
+```
+lock file version 4 requires `-Znext-lockfile-bump`
+```
+
+**Fix:** Delete `solana/Cargo.lock` and regenerate:
+
+```bash
+cd solana
+rm Cargo.lock
+cargo +solana generate-lockfile
+```
+
+### Native Messaging Not Working
+
+*   Verify Extension ID in `com.qcash.daemon.json` matches your loaded extension
+*   Ensure `daemon_wrapper.sh` has correct paths and is executable (`chmod +x daemon_wrapper.sh`)
+*   Check logs in `logs/` directory for daemon errors
+*   On macOS, ensure the config is in `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`
 
 ---
 
