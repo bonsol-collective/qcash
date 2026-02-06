@@ -1,12 +1,24 @@
-import { Shield, Wallet } from 'lucide-react';
+import { ExternalLink, Shield, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import { isTabMode, openInTab } from '../lib/popout';
 
 export default function Welcome() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center space-y-8 animate-fade-in font-sans">
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center space-y-8 animate-fade-in font-sans">
+      {!isTabMode() && (
+        <Button
+          onClick={openInTab}
+          variant="ghost"
+          size="icon"
+          className="absolute top-3 right-3 h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary"
+          title="Open in tab"
+        >
+          <ExternalLink className="w-4 h-4" />
+        </Button>
+      )}
 
       <div className="space-y-4">
         <div className="mx-auto w-20 h-20 bg-secondary rounded-2xl flex items-center justify-center mb-6 ring-1 ring-white/10">
