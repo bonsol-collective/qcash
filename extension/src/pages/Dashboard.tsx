@@ -1,5 +1,5 @@
 import type { PublicKey } from '@solana/web3.js';
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CheckCircle, Clock, Copy, Database, History, Home, Key, Loader2, RefreshCw, Send, ShieldCheck, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CheckCircle, Clock, Copy, Database, ExternalLink, History, Home, Key, Loader2, RefreshCw, Send, ShieldCheck, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { FundWalletCard } from '../components/FundWalletCard';
 import { Button } from '../components/ui/button';
@@ -8,6 +8,7 @@ import { useWallet } from '../context/WalletContext';
 import { InsufficientFundsError, useSolana } from '../hooks/useSolana';
 import { SendTokenModal } from '../components/SendTokenModal';
 import { useLedgerSync } from '../hooks/useLedgerSync';
+import { isTabMode, openInTab } from '../lib/popout';
 
 export default function Dashboard() {
     const { wallet } = useWallet();
@@ -99,15 +100,28 @@ export default function Dashboard() {
                         </h1>
                         <p className="text-muted-foreground text-xs font-medium">Post-Quantum Solana Storage</p>
                     </div>
-                    {status === 'registered' && (
-                        <Button
-                            onClick={() => setIsSendModalOpen(true)}
-                            size="sm"
-                            className="bg-primary text-primary-foreground hover:bg-white/90 gap-2 font-semibold shadow-sm"
-                        >
-                            <Send className="w-3.5 h-3.5" /> Send
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {status === 'registered' && (
+                            <Button
+                                onClick={() => setIsSendModalOpen(true)}
+                                size="sm"
+                                className="bg-primary text-primary-foreground hover:bg-white/90 gap-2 font-semibold shadow-sm"
+                            >
+                                <Send className="w-3.5 h-3.5" /> Send
+                            </Button>
+                        )}
+                        {!isTabMode() && (
+                            <Button
+                                onClick={openInTab}
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary"
+                                title="Open in tab"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                            </Button>
+                        )}
+                    </div>
                 </header>
 
                 {/* Dual Balance Display - Side by Side - Home tab only */}

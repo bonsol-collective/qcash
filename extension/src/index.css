@@ -82,6 +82,12 @@ body {
   overflow: hidden;
 }
 
+body.tab-mode {
+  width: 100%;
+  min-height: 100vh;
+  overflow: auto;
+}
+
 * {
   border-color: hsl(var(--border));
 }

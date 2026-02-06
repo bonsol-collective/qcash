@@ -11,10 +11,15 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { WalletProvider } from "./context/WalletContext.tsx";
 import { WasmProvider } from "./context/WasmContext.tsx";
+import { isTabMode } from "./lib/popout.ts";
 import "./index.css";
 
 // @ts-ignore
 globalThis.Buffer = Buffer;
+
+if (isTabMode()) {
+  document.body.classList.add("tab-mode");
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
